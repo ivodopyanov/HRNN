@@ -26,30 +26,12 @@ QUOTES = ["'", '“', '"']
 
 def get_data(settings):
     dictionary = load_dictionary()
-    indexes = load_indexes()
     labels = load_labels()
-    sentences = load_sentences()
-    splitted_sentences = [[]]*len(sentences)
-    sentence_labels = [0]*len(sentences)
-    sys.stdout.write("Filtering root labels:")
-    for phrase_idx, phrase in dictionary.items():
-        if phrase_idx % 1000 == 0:
-            sys.stdout.write("\rFiltering root labels: {}".format(phrase_idx))
-        try:
-            sentence_index = sentences.index(phrase)
-            sentence_labels[sentence_index] = labels[phrase_idx]
-            splitted_sentences[sentence_index] = phrase.split(" ")
-        except ValueError:
-            pass
-    sys.stdout.write("\n")
     word_corpus_encode, word_corpus_decode = load_word_corpus(settings['max_features'])
     return {'dict': dictionary,
             'labels': labels,
             'word_corpus_encode': word_corpus_encode,
-            'word_corpus_decode': word_corpus_decode,
-            'indexes': indexes,
-            'sentences': splitted_sentences,
-            'sentence_labels': sentence_labels}
+            'word_corpus_decode': word_corpus_decode}
 
 
 
@@ -66,18 +48,28 @@ def init_settings():
     settings['bucket_size_step'] = 4
     settings['batch_size'] = 32
     settings['max_sentence_len'] = 64
-    settings['max_features']=10000
+    settings['max_features']=15000
     settings['with_sentences']=False
     return settings
 
 
 def prepare_objects(data, settings):
+    sys.stdout.write('sentences count: '+str(len(data['labels']))+'\n')
+    indexes = list(range(0,len(data['labels'])))
+    random.shuffle(indexes)
+
+    train_segment = int(len(indexes)*0.8)
+    train_indexes = indexes[:train_segment]
+    val_indexes = indexes[train_segment:]
+
     model = build_model(data, settings)
-    data_gen = build_generator_HRNN(data, settings, data['indexes'][0])
-    test_gen = build_generator_HRNN(data, settings, data['indexes'][2])
+    data_gen = build_generator_HRNN(data, settings, train_indexes)
+    val_gen = build_generator_HRNN(data, settings, val_indexes)
     return {'model': model,
             'data_gen': data_gen,
-            'test_gen': test_gen}
+            'val_gen': val_gen,
+            'train_indexes': train_indexes,
+            'val_indexes': val_indexes}
 
 def build_model(data, settings):
     sys.stdout.write('building model\n')
@@ -111,8 +103,8 @@ def build_generator_HRNN(data, settings, indexes):
         buckets = {}
         while True:
             idx = walk_order.pop()-1
-            sentence = data['sentences'][idx]
-            label = data['sentence_labels'][idx]
+            sentence = data['dict'][idx]
+            label = data['labels'][idx]
             if len(sentence) > settings['max_sentence_len']:
                 continue
             bucket_size = ceil((len(sentence)+1) / settings['bucket_size_step'])*settings['bucket_size_step']
@@ -152,7 +144,7 @@ def build_batch(data, settings, sentence_batch):
     return X, Y
 
 def run_training(data, objects):
-    objects['model'].fit_generator(generator=objects['data_gen'], validation_data=objects['test_gen'], nb_val_samples=len(data['indexes'][2]), samples_per_epoch=len(data['indexes'][0]), nb_epoch=100, callbacks=[ReduceLROnPlateau()])
+    objects['model'].fit_generator(generator=objects['data_gen'], validation_data=objects['val_gen'], nb_val_samples=len(objects['val_indexes']), samples_per_epoch=len(objects['train_indexes']), nb_epoch=100, callbacks=[ReduceLROnPlateau()])
 
 
 def train(weights_filename):

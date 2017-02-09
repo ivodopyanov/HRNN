@@ -12,7 +12,7 @@ CHAR_COUNTS_FILENAME = "char_counts.txt"
 WORD_CORPUS_FILENAME = "words.txt"
 WORD_COUNTS_FILENAME = "word_counts.txt"
 
-def load_dictionary():
+def load_dictionary(split=False):
     result = {}
     sys.stdout.write('Loading dictionary\n')
     with open(DICTIONARY_FILENAME, "rt") as f:
@@ -20,6 +20,8 @@ def load_dictionary():
             data = row.split("|")
             phrase = data[0]
             phrase_id = int(data[1])
+            if split:
+                phrase = phrase.split(" ")
             result[phrase_id] = phrase
     return result
 
