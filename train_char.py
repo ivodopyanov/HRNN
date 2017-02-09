@@ -12,7 +12,7 @@ from keras.optimizers import Adam
 from keras.callbacks import ReduceLROnPlateau
 
 
-from HRNN_encoder import HRNN_encoder
+from HRNN_encoder_scalar import HRNN_encoder
 from utils import load_dictionary, load_labels, load_char_corpus, load_indexes, load_sentences
 
 

@@ -154,19 +154,10 @@ class HRNN_encoder(Layer):
             B_W = K.cast_to_floatx(1.)
 
 
-        fk_prev2 = K.expand_dims(fk_prev)
-        fk_prev2 = K.repeat_elements(fk_prev2, self.hidden_dim+1, 1)
-
         sum1 = self.ln(K.dot(x*B_W, self.W), self.gammas[0], self.betas[0])
         sum2 = self.ln(K.dot(h_tm1*B_U, self.U), self.gammas[1], self.betas[1])
 
-        ''' Если убрать всё лишнее:
-            FK(i-1,j) = hard_sigmoid((1-FK(i,j-1))*x(i)*W + h(i-1,j)*U + b)
-            Т.е. признак, готов ли текущий компонент или нет, зависит от
-            * текущей информации об этом компоненте
-            * следующего элемента в этом компоненте
-            * с учетом того, был ли готов следующий элемент'''
-        fk_candidate = self.inner_activation((1-fk_prev2)*sum1 + sum2 + self.b)[:, 0]
+        fk_candidate = self.inner_activation(sum1 + sum2 + self.b)[:, 0]
 
         # Фактическое новое состояние сети, если информация пришла слева и снизу. Учет FK - в итоговой сумме
         h_ = self.activation(sum1 + sum2 + self.b)[:, 1:]
