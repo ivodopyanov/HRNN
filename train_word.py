@@ -72,12 +72,9 @@ def init_settings():
 
 
 def prepare_objects(data, settings):
-    sys.stdout.write('sentences count: '+str(len(data['labels']))+'\n')
-
     model = build_model(data, settings)
     data_gen = build_generator_HRNN(data, settings, data['indexes'][0])
-    test_gen = build_generator_HRNN(data, settings, data['indexes'][1])
-
+    test_gen = build_generator_HRNN(data, settings, data['indexes'][2])
     return {'model': model,
             'data_gen': data_gen,
             'test_gen': test_gen}
@@ -155,7 +152,7 @@ def build_batch(data, settings, sentence_batch):
     return X, Y
 
 def run_training(data, objects):
-    objects['model'].fit_generator(generator=objects['data_gen'], validation_data=objects['test_gen'], nb_val_samples=len(data['indexes'][1]), samples_per_epoch=len(data['indexes'][0]), nb_epoch=100, callbacks=[ReduceLROnPlateau()])
+    objects['model'].fit_generator(generator=objects['data_gen'], validation_data=objects['test_gen'], nb_val_samples=len(data['indexes'][2]), samples_per_epoch=len(data['indexes'][0]), nb_epoch=100, callbacks=[ReduceLROnPlateau()])
 
 
 def train(weights_filename):
