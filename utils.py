@@ -2,14 +2,17 @@ import sys
 import os
 from collections import Counter
 
-DICTIONARY_FILENAME = "stanfordSentimentTreebank/dictionary.txt"
-LABELS_FILENAME = "stanfordSentimentTreebank/sentiment_labels.txt"
+STT_FOLDER = "stanfordSentimentTreebank/"
+DICTIONARY_FILENAME = STT_FOLDER+"dictionary.txt"
+LABELS_FILENAME = STT_FOLDER+"sentiment_labels.txt"
+SPLIT_FILENAME = STT_FOLDER+"datasetSplit.txt"
+SENTENCES_FILENAME = STT_FOLDER+"datasetSentences.txt"
 CHAR_CORPUS_FILENAME = "chars.txt"
 CHAR_COUNTS_FILENAME = "char_counts.txt"
 WORD_CORPUS_FILENAME = "words.txt"
 WORD_COUNTS_FILENAME = "word_counts.txt"
 
-def load_dictionary(split_phrases=False):
+def load_dictionary():
     result = {}
     sys.stdout.write('Loading dictionary\n')
     with open(DICTIONARY_FILENAME, "rt") as f:
@@ -17,8 +20,6 @@ def load_dictionary(split_phrases=False):
             data = row.split("|")
             phrase = data[0]
             phrase_id = int(data[1])
-            if split_phrases:
-                phrase = phrase.split(" ")
             result[phrase_id] = phrase
     return result
 
@@ -33,6 +34,26 @@ def load_labels():
             phrase_score = float(data[1])
             result.append(phrase_score)
     return result
+
+def load_indexes():
+    indexes = [[],[],[]]
+    with open(SPLIT_FILENAME, "rt") as f:
+        for idx, row in enumerate(f):
+            if idx == 0:
+                continue
+            data = row.strip("\n").split(",")
+            indexes[int(data[1])-1].append(int(data[0]))
+    return indexes
+
+def load_sentences():
+    result = []
+    with open(SENTENCES_FILENAME, "rt") as f:
+        for idx, row in enumerate(f):
+            if idx == 0:
+                continue
+            result.append(row.strip("\n").split("\t")[1])
+    return result
+
 
 def load_char_corpus(freq_limit):
     if not os.path.isfile(CHAR_CORPUS_FILENAME):

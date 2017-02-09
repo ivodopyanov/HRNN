@@ -13,7 +13,7 @@ from keras.callbacks import ReduceLROnPlateau
 
 
 from HRNN_encoder import HRNN_encoder
-from utils import load_dictionary, load_labels, load_word_corpus
+from utils import load_dictionary, load_labels, load_word_corpus, load_indexes, load_sentences
 
 
 CASES_FILENAME = "cases.txt"
@@ -25,15 +25,31 @@ QUOTES = ["'", '“', '"']
 
 
 def get_data(settings):
-    dictionary = load_dictionary(split_phrases=True)
-    from collections import Counter
-    cnt = Counter([len(d) for d in dictionary.values()])
+    dictionary = load_dictionary()
+    indexes = load_indexes()
     labels = load_labels()
+    sentences = load_sentences()
+    splitted_sentences = [[]]*len(sentences)
+    sentence_labels = [0]*len(sentences)
+    sys.stdout.write("Filtering root labels:")
+    for phrase_idx, phrase in dictionary.items():
+        if phrase_idx % 1000 == 0:
+            sys.stdout.write("\rFiltering root labels: {}".format(phrase_idx))
+        try:
+            sentence_index = sentences.index(phrase)
+            sentence_labels[sentence_index] = labels[phrase_idx]
+            splitted_sentences[sentence_index] = phrase.split(" ")
+        except ValueError:
+            pass
+    sys.stdout.write("\n")
     word_corpus_encode, word_corpus_decode = load_word_corpus(settings['max_features'])
     return {'dict': dictionary,
             'labels': labels,
             'word_corpus_encode': word_corpus_encode,
-            'word_corpus_decode': word_corpus_decode}
+            'word_corpus_decode': word_corpus_decode,
+            'indexes': indexes,
+            'sentences': splitted_sentences,
+            'sentence_labels': sentence_labels}
 
 
 
@@ -44,34 +60,27 @@ def init_settings():
     settings['depth'] = 16
     settings['dropout_W'] = 0.2
     settings['dropout_U'] = 0.2
-    settings['hidden_dims'] = [128]
+    settings['hidden_dims'] = [64]
     settings['dense_dropout'] = 0.5
     settings['num_of_classes'] = 5
-    settings['bucket_size_step'] = 16
-    settings['batch_size'] = 64
+    settings['bucket_size_step'] = 4
+    settings['batch_size'] = 32
     settings['max_sentence_len'] = 64
     settings['max_features']=10000
+    settings['with_sentences']=False
     return settings
 
 
 def prepare_objects(data, settings):
     sys.stdout.write('sentences count: '+str(len(data['labels']))+'\n')
-    indexes = list(range(0,len(data['labels'])))
-    random.shuffle(indexes)
-
-    train_segment = int(len(indexes)*0.8)
-    train_indexes = indexes[:train_segment]
-    val_indexes = indexes[train_segment:]
 
     model = build_model(data, settings)
-    data_gen = build_generator_HRNN(data, settings, train_indexes)
-    val_gen = build_generator_HRNN(data, settings, val_indexes)
+    data_gen = build_generator_HRNN(data, settings, data['indexes'][0])
+    test_gen = build_generator_HRNN(data, settings, data['indexes'][1])
 
     return {'model': model,
             'data_gen': data_gen,
-            'val_gen': val_gen,
-            'train_indexes': train_indexes,
-            'val_indexes': val_indexes}
+            'test_gen': test_gen}
 
 def build_model(data, settings):
     sys.stdout.write('building model\n')
@@ -104,9 +113,9 @@ def build_generator_HRNN(data, settings, indexes):
         np.random.shuffle(walk_order)
         buckets = {}
         while True:
-            idx = walk_order.pop()
-            sentence = data['dict'][idx]
-            label = data['labels'][idx]
+            idx = walk_order.pop()-1
+            sentence = data['sentences'][idx]
+            label = data['sentence_labels'][idx]
             if len(sentence) > settings['max_sentence_len']:
                 continue
             bucket_size = ceil((len(sentence)+1) / settings['bucket_size_step'])*settings['bucket_size_step']
@@ -120,7 +129,10 @@ def build_generator_HRNN(data, settings, indexes):
 
                 bucket_size_input = np.zeros((settings['batch_size'],1), dtype=int)
                 bucket_size_input[0][0]=bucket_size
-                yield [X, bucket_size_input], Y
+                if settings['with_sentences']:
+                    yield [X, bucket_size_input], Y, batch_sentences
+                else:
+                    yield [X, bucket_size_input], Y
             if len(walk_order) == 0:
                 walk_order = list(indexes)
                 np.random.shuffle(walk_order)
@@ -142,13 +154,8 @@ def build_batch(data, settings, sentence_batch):
         Y[i][label] = True
     return X, Y
 
-def run_training(objects):
-    objects['model'].fit_generator(generator=objects['data_gen'],
-                                   validation_data=objects['val_gen'],
-                                   nb_val_samples=len(objects['val_indexes']),
-                                   samples_per_epoch=len(objects['train_indexes']),
-                                   nb_epoch=100,
-                                   callbacks=[ReduceLROnPlateau()])
+def run_training(data, objects):
+    objects['model'].fit_generator(generator=objects['data_gen'], validation_data=objects['test_gen'], nb_val_samples=len(data['indexes'][1]), samples_per_epoch=len(data['indexes'][0]), nb_epoch=100, callbacks=[ReduceLROnPlateau()])
 
 
 def train(weights_filename):
@@ -156,9 +163,28 @@ def train(weights_filename):
     data = get_data(settings)
     objects = prepare_objects(data, settings)
     sys.stdout.write('Compiling model\n')
-    run_training(objects)
+    run_training(data, objects)
     objects['model'].save_weights(weights_filename)
 
+def test():
+    settings = init_settings()
+    settings['with_sentences'] = True
+    settings['batch_size']=1
+    data = get_data(settings)
+    objects = prepare_objects(data, settings)
+    objects['model'].load_weights("sttw1.h5")
+
+    indexes = list(range(0,len(data['labels'])))
+    random.shuffle(indexes)
+
+    train_segment = int(len(indexes)*0.8)
+    train_indexes = indexes[:train_segment]
+
+    data_gen = build_generator_HRNN(data, settings, train_indexes)
+    batch = next(data_gen)
+    for str in batch[2]:
+        print(str)
+    objects['model'].train_on_batch(batch[0], batch[1])
 
 if __name__=="__main__":
     train("weights.h5")

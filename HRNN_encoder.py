@@ -4,6 +4,7 @@ from keras.engine import Layer
 
 import theano as T
 import theano.tensor as TS
+from theano.printing import Print
 
 
 class HRNN_encoder(Layer):
@@ -128,6 +129,7 @@ class HRNN_encoder(Layer):
         last_fk = K.expand_dims(last_fk, 0)
         shifted_fk = K.concatenate([fk[1:], last_fk], axis=0)
         shifted_fk = TS.unbroadcast(shifted_fk, 0, 1)
+        #shifted_fk = Print("shifted_fk")(shifted_fk)
 
         return h, shifted_fk
 

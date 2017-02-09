@@ -3,3 +3,4 @@ __pycache__/
 *~
 stanfordSentimentTreebank/
 *.txt
+*.h5
