@@ -9,7 +9,7 @@ from math import ceil, floor
 from keras.models import Model
 from keras.layers import Dense, Dropout, Input, Masking, Activation, Embedding
 from keras.optimizers import Adam
-from keras.callbacks import ReduceLROnPlateau
+from keras.callbacks import LearningRateScheduler
 
 
 from HRNN_encoder_scalar import HRNN_encoder
@@ -144,8 +144,11 @@ def build_batch(data, settings, sentence_batch):
     return X, Y
 
 def run_training(data, objects):
-    objects['model'].fit_generator(generator=objects['data_gen'], validation_data=objects['val_gen'], nb_val_samples=len(objects['val_indexes']), samples_per_epoch=len(objects['train_indexes']), nb_epoch=100, callbacks=[ReduceLROnPlateau()])
+    objects['model'].fit_generator(generator=objects['data_gen'], validation_data=objects['val_gen'], nb_val_samples=len(objects['val_indexes']), samples_per_epoch=len(objects['train_indexes']), nb_epoch=50, callbacks=[LearningRateScheduler(lr_scheduler)])
 
+
+def lr_scheduler(epoch):
+    return epoch*0.0001 + (50-epoch)*0.001
 
 def train(weights_filename):
     settings = init_settings()
