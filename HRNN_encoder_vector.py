@@ -82,12 +82,16 @@ class HRNN_encoder(Layer):
         x = K.concatenate([x, pad])
 
         initial_hor_fk = K.sum(K.zeros_like(x), axis=(1,2))
+        initial_hor_fk = K.expand_dims(initial_hor_fk)
+        initial_hor_fk = K.tile(initial_hor_fk, (1, self.input_dim+self.hidden_dim))
 
         x = x.dimshuffle([1,0,2])
         x = x[:bucket_size]
         x = TS.unbroadcast(x, 0,1,2)
         initial_fk = K.zeros_like(x)
         initial_fk = K.sum(initial_fk, axis=(2)) #(max_len,samples)
+        initial_fk = K.expand_dims(initial_fk)
+        initial_fk = K.tile(initial_fk, (1, self.input_dim+self.hidden_dim))
         initial_fk = TS.unbroadcast(initial_fk, 0, 1)
         initial_hor_h = K.zeros_like(x[0]) #(samples, emb_size)
         initial_hor_h = TS.unbroadcast(initial_hor_h, 0, 1)
@@ -115,6 +119,7 @@ class HRNN_encoder(Layer):
         first_mask = K.expand_dims(first_mask, 0)
         mask2 = K.concatenate([mask[1:], first_mask], axis=0)
         mask2 = mask*(1-mask2)
+        mask2 = K.expand_dims(mask2)
         #mask2 = 1, если строка закончилась. Этот параметр нужен, т.к. на последнем шаге информационный поток надо всегда отдавать наверх
 
         results, _ = T.scan(self.horizontal_step,
@@ -154,21 +159,14 @@ class HRNN_encoder(Layer):
             B_W = K.cast_to_floatx(1.)
 
 
-
-
         sum1 = self.ln(K.dot(x*B_W, self.W), self.gammas[0], self.betas[0])
         sum2 = self.ln(K.dot(h_tm1*B_U, self.U), self.gammas[1], self.betas[1])
+        total_sum = sum1 + sum2 + self.b
 
-        ''' Если убрать всё лишнее:
-            FK(i-1,j) = hard_sigmoid((1-FK(i,j-1))*x(i)*W + h(i-1,j)*U + b)
-            Т.е. признак, готов ли текущий компонент или нет, зависит от
-            * текущей информации об этом компоненте
-            * следующего элемента в этом компоненте
-            * с учетом того, был ли готов следующий элемент'''
-        fk_candidate = self.inner_activation(sum1 + sum2 + self.b)[:, :self.input_dim+self.hidden_dim]
+        fk_candidate = self.inner_activation(total_sum[:, :self.input_dim+self.hidden_dim])
 
         # Фактическое новое состояние сети, если информация пришла слева и снизу. Учет FK - в итоговой сумме
-        h_ = self.activation(sum1 + sum2 + self.b)[:, self.input_dim+self.hidden_dim:]
+        h_ = self.activation(total_sum[:, self.input_dim+self.hidden_dim:])
 
         # Дополняем нулями спереди
         zeros = K.zeros_like(h_)
