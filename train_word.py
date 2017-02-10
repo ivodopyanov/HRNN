@@ -162,7 +162,7 @@ def build_batch(data, settings, sentence_batch):
     return X, Y
 
 def run_training(data, objects):
-    objects['model'].fit_generator(generator=objects['data_gen'], validation_data=objects['val_gen'], nb_val_samples=len(objects['val_indexes']), samples_per_epoch=len(objects['train_indexes']), nb_epoch=50, callbacks=[LearningRateScheduler(lr_scheduler)])
+    objects['model'].fit_generator(generator=objects['data_gen'], validation_data=objects['val_gen'], nb_val_samples=len(objects['val_indexes'])/10, samples_per_epoch=len(objects['train_indexes'])/10, nb_epoch=50, callbacks=[LearningRateScheduler(lr_scheduler)])
 
 
 def lr_scheduler(epoch):

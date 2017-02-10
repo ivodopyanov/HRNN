@@ -115,6 +115,7 @@ class HRNN_encoder(Layer):
         first_mask = K.expand_dims(first_mask, 0)
         mask2 = K.concatenate([mask[1:], first_mask], axis=0)
         mask2 = mask*(1-mask2)
+        mask2 = K.concatenate(first_mask, mask2)
         #mask2 = 1, if that sentence is over. That param required for making FK = 0 at the end of each sentence
 
         results, _ = T.scan(self.horizontal_step,
