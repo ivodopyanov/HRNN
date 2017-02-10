@@ -135,6 +135,7 @@ class HRNN_encoder(Layer):
         # Uncomment to monitor FK values during testing
         #shifted_fk = Print("shifted_fk")(shifted_fk)
 
+
         return h, shifted_fk
 
     # Horizontal pass along time dimension

@@ -60,15 +60,15 @@ def init_settings():
     settings = {}
     settings['word_embedding_size'] = 32
     settings['sentence_embedding_size'] = 128
-    settings['depth'] = 4
+    settings['depth'] = 12
     settings['dropout_W'] = 0.2
     settings['dropout_U'] = 0.2
     settings['hidden_dims'] = [64]
     settings['dense_dropout'] = 0.5
-    settings['bucket_size_step'] = 64
+    settings['bucket_size_step'] = 32
     settings['batch_size'] = 64
     settings['max_sentence_len'] = 1024
-    settings['max_features']=15000
+    settings['max_features']=10000
     settings['with_sentences']=False
     return settings
 
