@@ -154,7 +154,7 @@ def build_batch(data, settings, sentence_batch):
     for i, sentence_tuple in enumerate(sentence_batch):
         for idx, word in enumerate(sentence_tuple[0]):
             if word in data['word_corpus_encode']:
-                X[i][idx] = data['word_corpus_encode'][word]
+                X[i][idx] = data['word_corpus_encode'][word]+1
             else:
                 X[i][idx] = settings['max_features']+1
         X[i][min(len(sentence_tuple[0]), settings['max_sentence_len']-1)] = settings['max_features']+2

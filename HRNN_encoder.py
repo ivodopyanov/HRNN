@@ -93,10 +93,18 @@ class HRNN_encoder(Layer):
         initial_hor_h = TS.unbroadcast(initial_hor_h, 0, 1)
         data_mask = data_mask[:bucket_size]
 
+
+        first_mask = K.zeros_like(data_mask[0])
+        first_mask = K.expand_dims(first_mask, 0)
+        mask2 = K.concatenate([data_mask[1:], first_mask], axis=0)
+        mask2 = data_mask*(1-mask2)
+        mask2 = K.concatenate([first_mask, mask2], axis=0)
+        #mask2 = 1, if that sentence is over. That param required for making FK = 0 at the end of each sentence
+
         results, _ = T.scan(self.vertical_step,
                             sequences=[],
                             outputs_info=[x, initial_fk],
-                            non_sequences=[bucket_size, initial_hor_h, initial_hor_fk, data_mask],
+                            non_sequences=[bucket_size, initial_hor_h, initial_hor_fk, data_mask, mask2],
                             n_steps=self.depth)
         outputs = results[0]
         outputs = outputs[-1,-1,:,self.input_dim:]
@@ -110,13 +118,7 @@ class HRNN_encoder(Layer):
         initial_h = args[3]
         initial_fk=args[4]
         mask = args[5]
-
-        first_mask = K.zeros_like(mask[0])
-        first_mask = K.expand_dims(first_mask, 0)
-        mask2 = K.concatenate([mask[1:], first_mask], axis=0)
-        mask2 = mask*(1-mask2)
-        mask2 = K.concatenate([first_mask, mask2], axis=0)
-        #mask2 = 1, if that sentence is over. That param required for making FK = 0 at the end of each sentence
+        mask2 = args[6]
 
         results, _ = T.scan(self.horizontal_step,
                             sequences=[x, fk_prev, mask, mask2],
