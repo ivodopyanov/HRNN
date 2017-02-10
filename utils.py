@@ -13,52 +13,8 @@ CHAR_COUNTS_FILENAME = "char_counts.txt"
 WORD_CORPUS_FILENAME = "words.txt"
 WORD_COUNTS_FILENAME = "word_counts.txt"
 INDEXES_FILENAME = "indexes.txt"
-EOS_WORD = "%EOS%"
+EOS_WORD = "!@#EOS#@!"
 QUOTES = ["'", '“', '"']
-
-def load_dictionary(split=False):
-    result = {}
-    sys.stdout.write('Loading dictionary\n')
-    with open(DICTIONARY_FILENAME, "rt") as f:
-        for row in f:
-            data = row.split("|")
-            phrase = data[0]
-            phrase_id = int(data[1])
-            if split:
-                phrase = phrase.split(" ")
-            result[phrase_id] = phrase
-    return result
-
-def load_labels():
-    result = []
-    sys.stdout.write('Loading labels\n')
-    with open(LABELS_FILENAME, "rt") as f:
-        for idx, row in enumerate(f):
-            if idx == 0:
-                continue
-            data = row.split("|")
-            phrase_score = float(data[1])
-            result.append(phrase_score)
-    return result
-
-def load_indexes():
-    indexes = [[],[],[]]
-    with open(SPLIT_FILENAME, "rt") as f:
-        for idx, row in enumerate(f):
-            if idx == 0:
-                continue
-            data = row.strip("\n").split(",")
-            indexes[int(data[1])-1].append(int(data[0]))
-    return indexes
-
-def load_sentences():
-    result = []
-    with open(SENTENCES_FILENAME, "rt") as f:
-        for idx, row in enumerate(f):
-            if idx == 0:
-                continue
-            result.append(row.strip("\n").split("\t")[1])
-    return result
 
 
 def load_char_corpus(freq_limit):
