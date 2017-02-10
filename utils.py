@@ -2,15 +2,19 @@ import sys
 import os
 from collections import Counter
 
-STT_FOLDER = "stanfordSentimentTreebank/"
-DICTIONARY_FILENAME = STT_FOLDER+"dictionary.txt"
-LABELS_FILENAME = STT_FOLDER+"sentiment_labels.txt"
-SPLIT_FILENAME = STT_FOLDER+"datasetSplit.txt"
-SENTENCES_FILENAME = STT_FOLDER+"datasetSentences.txt"
+from nltk.tokenize import word_tokenize
+
+SOURCE_FILENAME = "yelp_academic_dataset_review.json"
+LABELS_FILENAME = "labels.txt"
+SENTENCES_FILENAME = "sentences.txt"
+SPLITTED_SENTENCES_FILENAME = "splitted_sentences.txt"
 CHAR_CORPUS_FILENAME = "chars.txt"
 CHAR_COUNTS_FILENAME = "char_counts.txt"
 WORD_CORPUS_FILENAME = "words.txt"
 WORD_COUNTS_FILENAME = "word_counts.txt"
+INDEXES_FILENAME = "indexes.txt"
+EOS_WORD = "%EOS%"
+QUOTES = ["'", '“', '"']
 
 def load_dictionary(split=False):
     result = {}
@@ -90,3 +94,33 @@ def load_word_corpus(max_features):
         word_corpus_decode.append(w[0])
         word_corpus_encode[w[0]] = idx
     return word_corpus_encode, word_corpus_decode
+
+
+def split_sentence_to_words(sentence):
+    sentence = sentence_cleaning(sentence)
+    words = word_tokenize(sentence)
+    return words
+
+def sentence_cleaning(sentence):
+    sentence = sentence.replace("\n", " ")
+    sentence = sentence.lower()
+    return sentence
+
+def strip_trailing_quotes(str):
+    while True:
+        has_quote = False
+        for quote in QUOTES:
+            if str.startswith(quote):
+                str = str[1:]
+                has_quote=True
+        if not has_quote:
+            break
+    while True:
+        has_quote = False
+        for quote in QUOTES:
+            if str.endswith(quote):
+                str = str[:-1]
+                has_quote=True
+        if not has_quote:
+            break
+    return str

@@ -13,15 +13,15 @@ class HRNN_encoder(Layer):
                  activation='tanh', inner_activation='hard_sigmoid',
                  **kwargs):
         '''
-        В слое применяются:
+        Layer also uses
         * Layer Normalization
-        * Bucketing (размер корзины подается на вход в качестве тензора (1,1) вместе с основным тензором
+        * Bucketing (bucket size goes as input of shape (1,1)
         * Masking
         * Dropout
 
-        :param input_dim: размерность входных векторов (символы\слова)
-        :param hidden_dim: размерность внутренних и выходных векторов слоя
-        :param depth: глубина иерархии
+        :param input_dim: dimensionality of input tensor (num of chars\word embedding size)
+        :param hidden_dim: dimensionality of hidden and output tensors
+        :param depth: tree hierarchy depth
         '''
         self.hidden_dim = hidden_dim
         self.input_dim = input_dim
@@ -44,11 +44,11 @@ class HRNN_encoder(Layer):
 
 
     def build(self, input_shape):
-        self.W = self.init((self.input_dim+self.hidden_dim, 2*self.hidden_dim+self.input_dim), name='{}_W'.format(self.name))
-        self.U = self.inner_init((self.input_dim+self.hidden_dim, 2*self.hidden_dim+self.input_dim), name='{}_U'.format(self.name))
-        self.b = K.zeros((2*self.hidden_dim+self.input_dim), name='{}_b'.format(self.name))
-        self.gammas = K.ones((2, 2*self.hidden_dim+self.input_dim), name="gammas")
-        self.betas = K.zeros((2, 2*self.hidden_dim+self.input_dim), name="betas")
+        self.W = self.init((self.input_dim+self.hidden_dim, self.hidden_dim+1), name='{}_W'.format(self.name))
+        self.U = self.inner_init((self.input_dim+self.hidden_dim, self.hidden_dim+1), name='{}_U'.format(self.name))
+        self.b = K.zeros((self.hidden_dim+1), name='{}_b'.format(self.name))
+        self.gammas = K.ones((2, self.hidden_dim+1), name="gammas")
+        self.betas = K.zeros((2, self.hidden_dim+1), name="betas")
         self.trainable_weights = [self.W ,self.U , self.b, self.gammas, self.betas]
         self.built = True
 
@@ -61,7 +61,7 @@ class HRNN_encoder(Layer):
 
     def call(self, input, mask=None):
         x = input[0]
-        # Keras не позволяет одномерные входы для моделей - поэтому тензор формы (1,1), а не скаляр или (1,)
+        # Keras doesn't allow 1D model inputs - so that tensor have shape (1,1) instead of scalar or (1,)
         bucket_size = input[1][0][0]
 
         data_mask = mask[0]
@@ -70,11 +70,11 @@ class HRNN_encoder(Layer):
         assert data_mask.ndim == x.ndim
         data_mask = data_mask.dimshuffle([1,0])
 
-        ''' Дополняем нулями сзади.
-            Входные тензоры для сети должны уметь содержать в себе информацию и о исходных данных (символы\слова),
-            и о результатах работы сети.
-            Поэтому длина тензора = input_dim+hidden_dim; исходные данные превращаются в (<input_dim> 00000000),
-            а результат работы каждого шага сети - в (00000 <output_dim>)'''
+        ''' Pad input with zeros behind.
+            Hidden vectors need to store info about input data and intermediate representations.
+            So they are stored in vector independently. Length of vector = input_dim+hidden_dim;
+            Input data transformed into (<input_dim> 00000000),
+            result of each step - into (00000 <output_dim>)'''
         pad = K.zeros_like(x)
         pad = K.sum(pad, axis=(2))
         pad = K.expand_dims(pad)
@@ -82,18 +82,14 @@ class HRNN_encoder(Layer):
         x = K.concatenate([x, pad])
 
         initial_hor_fk = K.sum(K.zeros_like(x), axis=(1,2))
-        initial_hor_fk = K.expand_dims(initial_hor_fk)
-        initial_hor_fk = K.tile(initial_hor_fk, (1, self.input_dim+self.hidden_dim))
 
         x = x.dimshuffle([1,0,2])
         x = x[:bucket_size]
         x = TS.unbroadcast(x, 0,1,2)
         initial_fk = K.zeros_like(x)
-        initial_fk = K.sum(initial_fk, axis=(2)) #(max_len,samples)
-        initial_fk = K.expand_dims(initial_fk)
-        initial_fk = K.tile(initial_fk, (1, self.input_dim+self.hidden_dim))
+        initial_fk = K.sum(initial_fk, axis=(2))
         initial_fk = TS.unbroadcast(initial_fk, 0, 1)
-        initial_hor_h = K.zeros_like(x[0]) #(samples, emb_size)
+        initial_hor_h = K.zeros_like(x[0])
         initial_hor_h = TS.unbroadcast(initial_hor_h, 0, 1)
         data_mask = data_mask[:bucket_size]
 
@@ -106,7 +102,7 @@ class HRNN_encoder(Layer):
         outputs = outputs[-1,-1,:,self.input_dim:]
         return outputs
 
-    # Проход в вертикальном направлении - вдоль измерения иерархии
+    # Vertical pass along hierarchy dimension
     def vertical_step(self, *args):
         x = args[0]
         fk_prev = args[1]
@@ -119,8 +115,7 @@ class HRNN_encoder(Layer):
         first_mask = K.expand_dims(first_mask, 0)
         mask2 = K.concatenate([mask[1:], first_mask], axis=0)
         mask2 = mask*(1-mask2)
-        mask2 = K.expand_dims(mask2)
-        #mask2 = 1, если строка закончилась. Этот параметр нужен, т.к. на последнем шаге информационный поток надо всегда отдавать наверх
+        #mask2 = 1, if that sentence is over. That param required for making FK = 0 at the end of each sentence
 
         results, _ = T.scan(self.horizontal_step,
                             sequences=[x, fk_prev, mask, mask2],
@@ -129,16 +124,17 @@ class HRNN_encoder(Layer):
         h = results[0]
         fk = results[1]
 
-        #Сдвигаем рассчитанные fk на один шаг влево - т.к. на шаге i мы считаем fk для предыдущего шага
+        #Shift computed FK for 1 step left because at the step i we compute FK for i-1
         last_fk = K.zeros_like(fk[0])
         last_fk = K.expand_dims(last_fk, 0)
         shifted_fk = K.concatenate([fk[1:], last_fk], axis=0)
         shifted_fk = TS.unbroadcast(shifted_fk, 0, 1)
+        # Uncomment to monitor FK values during testing
         #shifted_fk = Print("shifted_fk")(shifted_fk)
 
         return h, shifted_fk
 
-    # Проход в горизонтальном направлении - вдоль измерения времени
+    # Horizontal pass along time dimension
     def horizontal_step(self, *args):
         x = args[0]
         fk_prev = args[1]
@@ -161,42 +157,46 @@ class HRNN_encoder(Layer):
 
         sum1 = self.ln(K.dot(x*B_W, self.W), self.gammas[0], self.betas[0])
         sum2 = self.ln(K.dot(h_tm1*B_U, self.U), self.gammas[1], self.betas[1])
-        total_sum = sum1 + sum2 + self.b
 
-        fk_candidate = self.inner_activation(total_sum[:, :self.input_dim+self.hidden_dim])
+        fk_candidate = self.inner_activation(sum1 + sum2 + self.b)[:, 0]
 
-        # Фактическое новое состояние сети, если информация пришла слева и снизу. Учет FK - в итоговой сумме
-        h_ = self.activation(total_sum[:, self.input_dim+self.hidden_dim:])
+        # Actual new hidden state if node got info from left and from below
+        h_ = self.activation(sum1 + sum2 + self.b)[:, 1:]
 
-        # Дополняем нулями спереди
+        # Pad with zeros in front
         zeros = K.zeros_like(h_)
         zeros = K.sum(zeros, axis=(1))
         zeros = K.expand_dims(zeros)
         pad = K.tile(zeros, (1, self.input_dim))
         h_ = K.concatenate([pad, h_])
 
+        fk_prev_expanded = K.expand_dims(fk_prev)
+        fk_prev_expanded = K.repeat_elements(fk_prev_expanded, self.hidden_dim+self.input_dim, 1)
 
-        ''' Итоговая формула h
-            Если информация приходит только с одного из направлений - то просто передаем это значение дальше
-            (направление, в котором передавать, будет вычислено на следующем шаге)
-            Иначе - выполняем вычисление по стандартной рекурсивной формуле
+        fk_candidate_expanded = K.expand_dims(fk_candidate)
+        fk_candidate_expanded = K.repeat_elements(fk_candidate_expanded, self.hidden_dim+self.input_dim, 1)
+
+        ''' Total formula for h and FK
+            If information flows from one direction only then simply propagate that value further
+            (direction for propagation will be calculated on the next step)
+            Otherwise - perform default recurrent computation
         '''
-        h_candidate = (1-fk_candidate)*x + fk_candidate*h_
-        h = fk_prev*h_tm1 + (1-fk_prev)*h_candidate
+        h_candidate = (1-fk_candidate_expanded)*x + fk_candidate_expanded*h_
+        h = fk_prev_expanded*h_tm1 + (1-fk_prev_expanded)*h_candidate
         fk = fk_prev + (1-fk_prev)*fk_candidate
 
 
         mask_for_h = K.expand_dims(mask)
-        # Если это последний элемент в последовательности, то всегда отдаем его наверх
+        # Make FK = 0 if that's last element of sequence
         fk = K.switch(mask2, 0, fk)
-        # Применяем маску - пропускаем оставшиеся 0 от фактического конца строки до конца батча
+        # Apply mask
         output1 = K.switch(mask_for_h, h, h_tm1)
-        output2 = K.switch(mask_for_h, fk, fk_tm1)
+        output2 = K.switch(mask, fk, fk_tm1)
         result = [output1, output2]
         return result
 
 
-    # Формула для Linear Normalization
+    # Linear Normalization
     def ln(self, x, gammas, betas):
         m = K.mean(x, axis=-1, keepdims=True)
         std = K.sqrt(K.var(x, axis=-1, keepdims=True) + self.epsilon)

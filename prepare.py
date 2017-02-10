@@ -1,42 +1,77 @@
 import sys
-from utils import load_dictionary
+import random
 from collections import defaultdict
 
-from utils import CHAR_COUNTS_FILENAME, CHAR_CORPUS_FILENAME, WORD_CORPUS_FILENAME, WORD_COUNTS_FILENAME
+import utils
+
+
 
 def main():
-    data = load_dictionary()
+    text_count = [0]*5
+    label_file = open(utils.LABELS_FILENAME, "wt", encoding="utf8")
+    sentences_file = open(utils.SENTENCES_FILENAME, "wt", encoding="utf8")
+    splitted_sentences_file = open(utils.SPLITTED_SENTENCES_FILENAME, "wt", encoding="utf8")
     char_count = defaultdict(int)
     word_count = defaultdict(int)
-    sys.stdout.write("Calculating char and word corpuses:\n")
-    for idx, sentence in enumerate(data.values()):
-        if idx%1000 == 0:
-            sys.stdout.write("\r{} / {}".format(idx, len(data)))
-        for char in sentence:
-            char_count[char] += 1
-        words = sentence.split(" ")
-        for word in words:
-            word_count[word] += 1
-    word_corpus = list(word_count.keys())
-    word_corpus.sort()
+
+    with open(utils.SOURCE_FILENAME, "rt") as f:
+        while True:
+            total_sum = sum(text_count)
+            if total_sum == 145000*5:
+                break
+            if total_sum % 10000 == 0:
+                sys.stdout.write("\r {} {} {} {} {}".format(text_count[0], text_count[1], text_count[2], text_count[3], text_count[4]))
+            s = f.readline()
+            st_index = s.index("\"stars\"")
+            st_value = int(s[st_index+9])-1
+            if text_count[st_value] >= 145000:
+                continue
+            text_index = s.index("\"text\"")
+            text_start_index = text_index+9
+            text_end_index = s.index("\"", text_start_index)
+            text = s[text_start_index:text_end_index]
+
+            text_count[st_value] += 1
+
+            label_file.write(str(st_value)+"\n")
+            sentences_file.write(text+" "+utils.EOS_WORD+"\n")
+            cleaned_text = utils.split_sentence_to_words(text)
+            splitted_sentences_file.write(" ".join(cleaned_text)+" "+utils.EOS_WORD+"\n")
+
+            for char in text:
+                char_count[char] += 1
+            for word in cleaned_text:
+                word_count[word] += 1
+
+    indexes = list(range(145000*5))
+    random.shuffle(indexes)
+
+    with open(utils.INDEXES_FILENAME, "wt", encoding="utf8") as f:
+        for index in indexes:
+            f.write(str(index)+"\n")
     char_corpus = list(char_count.keys())
     char_corpus.sort()
+    word_corpus = list(word_count.keys())
+    word_corpus.sort()
+
+    with open(utils.CHAR_CORPUS_FILENAME, "wt", encoding="utf8") as f:
+        for char in char_corpus:
+            f.write(char)
+    with open(utils.CHAR_COUNTS_FILENAME, "wt", encoding="utf8") as f:
+        for char in char_corpus:
+            f.write("{}\n".format(char_count[char]))
+    with open(utils.WORD_CORPUS_FILENAME, "wt", encoding="utf8") as f:
+        for word in word_corpus:
+            f.write(word+"\n")
+    with open(utils.WORD_COUNTS_FILENAME, "wt", encoding="utf8") as f:
+        for word in word_corpus:
+            f.write("{}\n".format(word_count[word]))
+
+    label_file.close()
+    sentences_file.close()
+    splitted_sentences_file.close()
 
 
-    char_corpus_file = open(CHAR_CORPUS_FILENAME, "wt")
-    char_counts_file = open(CHAR_COUNTS_FILENAME, "wt")
-    word_corpus_file = open(WORD_CORPUS_FILENAME, "wt")
-    word_counts_file = open(WORD_COUNTS_FILENAME, "wt")
-    for char in char_corpus:
-        char_corpus_file.write(char)
-        char_counts_file.write(str(char_count[char])+"\n")
-    for word in word_corpus:
-        word_corpus_file.write(word+"\n")
-        word_counts_file.write(str(word_count[word])+"\n")
-    char_corpus_file.close()
-    char_counts_file.close()
-    word_corpus_file.close()
-    word_counts_file.close()
 
 
 

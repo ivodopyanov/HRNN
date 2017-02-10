@@ -12,8 +12,8 @@ from keras.optimizers import Adam
 from keras.callbacks import LearningRateScheduler
 
 
-from HRNN_encoder_scalar import HRNN_encoder
-from utils import load_dictionary, load_labels, load_char_corpus, load_indexes, load_sentences
+from HRNN_encoder import HRNN_encoder
+import utils
 
 
 CASES_FILENAME = "cases.txt"
@@ -23,40 +23,58 @@ QUOTES = ["'", '“', '"']
 
 
 
+def get_data(settings):
+    with open(utils.SENTENCES_FILENAME, "rt") as f:
+        sentences = f.read().split(utils.EOS_WORD)
+    with open(utils.LABELS_FILENAME, "rt") as f:
+        labels = f.read().splitlines()
 
-def get_data():
-    dictionary = load_dictionary()
-    labels = load_labels()
-    char_corpus_encode, char_corpus_decode, char_count = load_char_corpus(1e-5)
-    return {'dict': dictionary,
-            'labels': labels,
+    sentences = sentences[:-1]
+
+    labels_set = set()
+    result = []
+    print("Reading data:\n")
+    for sentence_pos in range(len(sentences)):
+        if sentence_pos%1000==0:
+            sys.stdout.write("\r "+str(sentence_pos)+" / "+str(len(sentences)))
+        sentence = utils.strip_trailing_quotes(sentences[sentence_pos])
+        sentence = sentence.strip("\n")
+        result.append({'label': labels[sentence_pos], "sentence": sentence})
+        labels_set.add(labels[sentence_pos])
+    labels_list = list(labels_set)
+    labels_list.sort()
+    sys.stdout.write("\n")
+
+    char_corpus_encode, char_corpus_decode, char_count = utils.load_char_corpus(1e-5)
+    settings['num_of_classes'] = len(labels_list)
+    data = {'labels': labels_list,
+            'sentences': result,
             'char_corpus_encode': char_corpus_encode,
             'char_corpus_decode': char_corpus_decode,
             'char_count': char_count}
-
+    return data, settings
 
 
 def init_settings():
     settings = {}
     settings['sentence_embedding_size'] = 256
-    settings['depth'] = 16
+    settings['depth'] = 4
     settings['dropout_W'] = 0.2
     settings['dropout_U'] = 0.2
     settings['hidden_dims'] = [64]
     settings['dense_dropout'] = 0.5
-    settings['num_of_classes'] = 5
     settings['bucket_size_step'] = 16
     settings['batch_size'] = 64
-    settings['max_sentence_len'] = 256
+    settings['max_sentence_len'] = 512
     return settings
 
 
 def prepare_objects(data, settings):
-    sys.stdout.write('sentences count: '+str(len(data['labels']))+'\n')
-    indexes = list(range(0,len(data['labels'])))
-    random.shuffle(indexes)
+    with open(utils.INDEXES_FILENAME, "rt") as f:
+        indexes = f.read().splitlines()
+    indexes = [int(index) for index in indexes]
+    train_segment = int(len(indexes)*0.9)
 
-    train_segment = int(len(indexes)*0.8)
     train_indexes = indexes[:train_segment]
     val_indexes = indexes[train_segment:]
 
@@ -71,7 +89,7 @@ def prepare_objects(data, settings):
             'val_indexes': val_indexes}
 
 def build_model(data, settings):
-    sys.stdout.write('building model\n')
+    sys.stdout.write('Building model\n')
     data_input = Input(shape=(settings['max_sentence_len'], data['char_count']))
     bucket_size_input = Input(shape=(1,),dtype="int32")
     masking = Masking()(data_input)
@@ -100,8 +118,9 @@ def build_generator_HRNN(data, settings, indexes):
         buckets = {}
         while True:
             idx = walk_order.pop()-1
-            sentence = data['dict'][idx]
-            label = data['labels'][idx]
+            row = data['sentences'][idx]
+            sentence = row['sentence']
+            label = row['label']
             if len(sentence) > settings['max_sentence_len']:
                 continue
             bucket_size = ceil(len(sentence) / settings['bucket_size_step'])*settings['bucket_size_step']
@@ -127,9 +146,6 @@ def build_batch(data, settings, sentence_batch):
     for i, sentence_tuple in enumerate(sentence_batch):
         result_ch_pos = 0
         sentence = sentence_tuple[0]
-        label = floor(sentence_tuple[1] * settings['num_of_classes'])
-        if label == 5:
-            label = 4
         for ch_pos in range(len(sentence)):
             if sentence[ch_pos] in data['char_corpus_encode']:
                 X[i][result_ch_pos][data['char_corpus_encode'][sentence[ch_pos]]] = True
@@ -139,7 +155,7 @@ def build_batch(data, settings, sentence_batch):
             if result_ch_pos == settings['max_sentence_len']-2:
                 break
         X[i][result_ch_pos][data['char_count']-1] = True
-        Y[i][label] = True
+        Y[i][data['labels'].index(sentence_tuple[1])] = True
     return X, Y
 
 def run_training(data, objects):
@@ -155,7 +171,7 @@ def lr_scheduler(epoch):
 
 def train(weights_filename):
     settings = init_settings()
-    data = get_data()
+    data, settings = get_data(settings)
     objects = prepare_objects(data, settings)
     sys.stdout.write('Compiling model\n')
     run_training(data, objects)
