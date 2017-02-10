@@ -115,7 +115,7 @@ class HRNN_encoder(Layer):
         first_mask = K.expand_dims(first_mask, 0)
         mask2 = K.concatenate([mask[1:], first_mask], axis=0)
         mask2 = mask*(1-mask2)
-        mask2 = K.concatenate(first_mask, mask2)
+        mask2 = K.concatenate([first_mask, mask2], axis=0)
         #mask2 = 1, if that sentence is over. That param required for making FK = 0 at the end of each sentence
 
         results, _ = T.scan(self.horizontal_step,
@@ -158,11 +158,12 @@ class HRNN_encoder(Layer):
 
         sum1 = self.ln(K.dot(x*B_W, self.W), self.gammas[0], self.betas[0])
         sum2 = self.ln(K.dot(h_tm1*B_U, self.U), self.gammas[1], self.betas[1])
+        sum = sum1 + sum2 + self.b
 
-        fk_candidate = self.inner_activation(sum1 + sum2 + self.b)[:, 0]
+        fk_candidate = self.inner_activation(sum[:, 0])
 
         # Actual new hidden state if node got info from left and from below
-        h_ = self.activation(sum1 + sum2 + self.b)[:, 1:]
+        h_ = self.activation(sum[:, 1:])
 
         # Pad with zeros in front
         zeros = K.zeros_like(h_)
@@ -188,12 +189,12 @@ class HRNN_encoder(Layer):
 
 
         mask_for_h = K.expand_dims(mask)
+        # Apply mask
+        h = K.switch(mask_for_h, h, h_tm1)
+        fk = K.switch(mask, fk, fk_tm1)
         # Make FK = 0 if that's last element of sequence
         fk = K.switch(mask2, 0, fk)
-        # Apply mask
-        output1 = K.switch(mask_for_h, h, h_tm1)
-        output2 = K.switch(mask, fk, fk_tm1)
-        result = [output1, output2]
+        result = [h, fk]
         return result
 
 
