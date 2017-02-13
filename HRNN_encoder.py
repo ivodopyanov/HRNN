@@ -89,8 +89,10 @@ class HRNN_encoder(Layer):
         initial_fk = K.zeros_like(x)
         initial_fk = K.sum(initial_fk, axis=(2))
         initial_fk = TS.unbroadcast(initial_fk, 0, 1)
+        initial_has_value = K.ones_like(initial_fk)
         initial_hor_h = K.zeros_like(x[0])
         initial_hor_h = TS.unbroadcast(initial_hor_h, 0, 1)
+        initial_hor_has_value = K.zeros_like(initial_hor_fk)
         data_mask = data_mask[:bucket_size]
 
 
@@ -103,8 +105,8 @@ class HRNN_encoder(Layer):
 
         results, _ = T.scan(self.vertical_step,
                             sequences=[],
-                            outputs_info=[x, initial_fk, initial_fk],
-                            non_sequences=[bucket_size, initial_hor_h, initial_hor_fk, data_mask, mask2],
+                            outputs_info=[x, initial_fk, initial_fk, initial_has_value],
+                            non_sequences=[bucket_size, initial_hor_h, initial_hor_fk, data_mask, mask2, initial_hor_has_value],
                             n_steps=self.depth)
         outputs = results[0]
         outputs = outputs[-1,-1,:,self.input_dim:]
@@ -115,18 +117,21 @@ class HRNN_encoder(Layer):
         x = args[0]
         fk_prev_tm1 = args[1]
         fk_prev = args[2]
-        bucket_size=args[3]
-        initial_h = args[4]
-        initial_fk=args[5]
-        mask = args[6]
-        mask2 = args[7]
+        has_value_prev = args[3]
+        bucket_size=args[4]
+        initial_h = args[5]
+        initial_fk=args[6]
+        mask = args[7]
+        mask2 = args[8]
+        initial_has_value = args[9]
 
         results, _ = T.scan(self.horizontal_step,
-                            sequences=[x, fk_prev_tm1, fk_prev, mask, mask2],
-                            outputs_info=[initial_h, initial_fk],
+                            sequences=[x, fk_prev_tm1, fk_prev, mask, mask2, has_value_prev],
+                            outputs_info=[initial_h, initial_fk, initial_has_value],
                             n_steps=bucket_size)
         h = results[0]
         fk = results[1]
+        has_value = results[2]
 
         #Shift computed FK for 1 step left because at the step i we compute FK for i-1
         last_fk = K.zeros_like(fk[0])
@@ -135,9 +140,10 @@ class HRNN_encoder(Layer):
         shifted_fk = TS.unbroadcast(shifted_fk, 0, 1)
         # Uncomment to monitor FK values during testing
         #shifted_fk = Print("shifted_fk")(shifted_fk)
+        #has_value = Print("has_value")(has_value)
 
 
-        return h, fk, shifted_fk
+        return h, fk, shifted_fk, has_value
 
     # Horizontal pass along time dimension
     def horizontal_step(self, *args):
@@ -146,8 +152,10 @@ class HRNN_encoder(Layer):
         fk_prev = args[2]
         mask = args[3]
         mask2 = args[4]
-        h_tm1 = args[5]
-        fk_tm1 = args[6]
+        has_value_prev = args[5]
+        h_tm1 = args[6]
+        fk_tm1 = args[7]
+        has_value_tm1 = args[8]
 
 
         if 0 < self.dropout_U < 1:
@@ -161,13 +169,12 @@ class HRNN_encoder(Layer):
         else:
             B_W = K.cast_to_floatx(1.)
 
-
         sum1 = self.ln(K.dot(x*B_W, self.W), self.gammas[0], self.betas[0])
         sum2 = self.ln(K.dot(h_tm1*B_U, self.U), self.gammas[1], self.betas[1])
         sum = sum1 + sum2 + self.b
 
-        h_tm1_is_not_empty = K.not_equal(K.sum(h_tm1, axis=1), 0)
-        fk_candidate = (1-h_tm1_is_not_empty)+h_tm1_is_not_empty*self.inner_activation(sum[:, 0])
+
+        fk_candidate = self.inner_activation(sum[:, 0])
         fk_candidate = K.switch(mask2, 0, fk_candidate)
 
         # Actual new hidden state if node got info from left and from below
@@ -183,28 +190,42 @@ class HRNN_encoder(Layer):
         fk_prev_expanded = K.expand_dims(fk_prev)
         fk_prev_expanded = K.repeat_elements(fk_prev_expanded, self.hidden_dim+self.input_dim, 1)
 
-
-
         fk_candidate_expanded = K.expand_dims(fk_candidate)
         fk_candidate_expanded = K.repeat_elements(fk_candidate_expanded, self.hidden_dim+self.input_dim, 1)
+
+        has_value_prev_expanded = K.expand_dims(has_value_prev)
+        has_value_prev_expanded = K.repeat_elements(has_value_prev_expanded, self.hidden_dim+self.input_dim, 1)
+        has_value_tm1_expanded = K.expand_dims(has_value_tm1)
+        has_value_tm1_expanded = K.repeat_elements(has_value_tm1_expanded, self.hidden_dim+self.input_dim, 1)
 
         ''' Total formula for h and FK
             If information flows from one direction only then simply propagate that value further
             (direction for propagation will be calculated on the next step)
             Otherwise - perform default recurrent computation
         '''
-        h_candidate = (1-fk_candidate_expanded)*x + fk_candidate_expanded*h_
-        h = fk_prev_expanded*h_tm1 + (1-fk_prev_expanded)*h_candidate
+        h_ = has_value_prev_expanded*has_value_tm1_expanded*h_ + \
+            (1 - has_value_prev_expanded)*has_value_tm1_expanded*h_tm1 + \
+             has_value_prev_expanded*(1-has_value_tm1_expanded)*x
+        h = fk_prev_expanded*fk_candidate_expanded*h_tm1 + \
+            (1-fk_prev_expanded)*(1-fk_candidate_expanded)*x + \
+            (1-fk_prev_expanded)*fk_candidate_expanded*h_
         fk = fk_prev_tm1 + (1-fk_prev_tm1)*fk_candidate
+
+        has_no_value = fk_prev*(1-fk) + \
+                       fk_prev*fk*(1-has_value_tm1) + \
+                       (1-fk_prev)*(1-fk)*(1-has_value_prev) + \
+                       (1-fk_prev)*fk*(1-has_value_tm1)*(1-has_value_prev)
+        has_value = 1 - has_no_value
 
         mask_for_h = K.expand_dims(mask)
         # Apply mask
         h = K.switch(mask_for_h, h, h_tm1)
         fk = K.switch(mask, fk, fk_tm1)
+        has_value = K.switch(mask, has_value, has_value_tm1)
         # Make FK = 0 if that's last element of sequence
         fk = K.switch(mask2, 0, fk)
 
-        result = [h, fk]
+        result = [h, fk, has_value]
         return result
 
 
