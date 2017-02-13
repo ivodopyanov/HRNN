@@ -103,7 +103,7 @@ class HRNN_encoder(Layer):
 
         results, _ = T.scan(self.vertical_step,
                             sequences=[],
-                            outputs_info=[x, initial_fk],
+                            outputs_info=[x, initial_fk, initial_fk],
                             non_sequences=[bucket_size, initial_hor_h, initial_hor_fk, data_mask, mask2],
                             n_steps=self.depth)
         outputs = results[0]
@@ -113,15 +113,16 @@ class HRNN_encoder(Layer):
     # Vertical pass along hierarchy dimension
     def vertical_step(self, *args):
         x = args[0]
-        fk_prev = args[1]
-        bucket_size=args[2]
-        initial_h = args[3]
-        initial_fk=args[4]
-        mask = args[5]
-        mask2 = args[6]
+        fk_prev_tm1 = args[1]
+        fk_prev = args[2]
+        bucket_size=args[3]
+        initial_h = args[4]
+        initial_fk=args[5]
+        mask = args[6]
+        mask2 = args[7]
 
         results, _ = T.scan(self.horizontal_step,
-                            sequences=[x, fk_prev, mask, mask2],
+                            sequences=[x, fk_prev_tm1, fk_prev, mask, mask2],
                             outputs_info=[initial_h, initial_fk],
                             n_steps=bucket_size)
         h = results[0]
@@ -136,16 +137,17 @@ class HRNN_encoder(Layer):
         #shifted_fk = Print("shifted_fk")(shifted_fk)
 
 
-        return h, shifted_fk
+        return h, fk, shifted_fk
 
     # Horizontal pass along time dimension
     def horizontal_step(self, *args):
         x = args[0]
-        fk_prev = args[1]
-        mask = args[2]
-        mask2 = args[3]
-        h_tm1 = args[4]
-        fk_tm1 = args[5]
+        fk_prev_tm1 = args[1]
+        fk_prev = args[2]
+        mask = args[3]
+        mask2 = args[4]
+        h_tm1 = args[5]
+        fk_tm1 = args[6]
 
         if 0 < self.dropout_U < 1:
             ones = K.ones((self.input_dim+self.hidden_dim))
@@ -188,7 +190,7 @@ class HRNN_encoder(Layer):
         '''
         h_candidate = (1-fk_candidate_expanded)*x + fk_candidate_expanded*h_
         h = fk_prev_expanded*h_tm1 + (1-fk_prev_expanded)*h_candidate
-        fk = fk_prev + (1-fk_prev)*fk_candidate
+        fk = fk_prev_tm1 + (1-fk_prev_tm1)*fk_candidate
 
 
         mask_for_h = K.expand_dims(mask)
@@ -197,6 +199,7 @@ class HRNN_encoder(Layer):
         fk = K.switch(mask, fk, fk_tm1)
         # Make FK = 0 if that's last element of sequence
         fk = K.switch(mask2, 0, fk)
+
         result = [h, fk]
         return result
 
