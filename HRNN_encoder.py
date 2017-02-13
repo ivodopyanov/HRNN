@@ -149,6 +149,7 @@ class HRNN_encoder(Layer):
         h_tm1 = args[5]
         fk_tm1 = args[6]
 
+
         if 0 < self.dropout_U < 1:
             ones = K.ones((self.input_dim+self.hidden_dim))
             B_U = K.in_train_phase(K.dropout(ones, self.dropout_U), ones)
@@ -165,7 +166,9 @@ class HRNN_encoder(Layer):
         sum2 = self.ln(K.dot(h_tm1*B_U, self.U), self.gammas[1], self.betas[1])
         sum = sum1 + sum2 + self.b
 
-        fk_candidate = self.inner_activation(sum[:, 0])
+        h_tm1_is_empty = K.not_equal(K.sum(h_tm1, axis=1), 0)
+        fk_candidate = h_tm1_is_empty*self.inner_activation(sum[:, 0])
+        fk_candidate = K.switch(mask2, 0, fk_candidate)
 
         # Actual new hidden state if node got info from left and from below
         h_ = self.activation(sum[:, 1:])
@@ -180,6 +183,8 @@ class HRNN_encoder(Layer):
         fk_prev_expanded = K.expand_dims(fk_prev)
         fk_prev_expanded = K.repeat_elements(fk_prev_expanded, self.hidden_dim+self.input_dim, 1)
 
+
+
         fk_candidate_expanded = K.expand_dims(fk_candidate)
         fk_candidate_expanded = K.repeat_elements(fk_candidate_expanded, self.hidden_dim+self.input_dim, 1)
 
@@ -191,7 +196,6 @@ class HRNN_encoder(Layer):
         h_candidate = (1-fk_candidate_expanded)*x + fk_candidate_expanded*h_
         h = fk_prev_expanded*h_tm1 + (1-fk_prev_expanded)*h_candidate
         fk = fk_prev_tm1 + (1-fk_prev_tm1)*fk_candidate
-
 
         mask_for_h = K.expand_dims(mask)
         # Apply mask
