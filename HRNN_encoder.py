@@ -166,8 +166,8 @@ class HRNN_encoder(Layer):
         sum2 = self.ln(K.dot(h_tm1*B_U, self.U), self.gammas[1], self.betas[1])
         sum = sum1 + sum2 + self.b
 
-        h_tm1_is_empty = K.not_equal(K.sum(h_tm1, axis=1), 0)
-        fk_candidate = h_tm1_is_empty*self.inner_activation(sum[:, 0])
+        h_tm1_is_not_empty = K.not_equal(K.sum(h_tm1, axis=1), 0)
+        fk_candidate = (1-h_tm1_is_not_empty)+h_tm1_is_not_empty*self.inner_activation(sum[:, 0])
         fk_candidate = K.switch(mask2, 0, fk_candidate)
 
         # Actual new hidden state if node got info from left and from below
