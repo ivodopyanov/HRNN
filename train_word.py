@@ -31,6 +31,8 @@ def get_data(settings):
 
     sentences = sentences[:-1]
 
+
+
     labels_set = set()
     result = []
     print("Reading data:\n")
@@ -46,6 +48,9 @@ def get_data(settings):
     labels_list.sort()
     sys.stdout.write("\n")
 
+    from collections import Counter
+    cnt = Counter([len(l['sentence']) for l in result])
+
     word_corpus_encode, word_corpus_decode = utils.load_word_corpus(settings['max_features'])
     settings['num_of_classes'] = len(labels_list)
     data = {'labels': labels_list,
@@ -60,15 +65,16 @@ def init_settings():
     settings = {}
     settings['word_embedding_size'] = 32
     settings['sentence_embedding_size'] = 128
-    settings['depth'] = 12
+    settings['depth'] = 16
     settings['dropout_W'] = 0.2
     settings['dropout_U'] = 0.2
     settings['hidden_dims'] = [64]
     settings['dense_dropout'] = 0.5
     settings['bucket_size_step'] = 32
     settings['batch_size'] = 64
-    settings['max_sentence_len'] = 1024
-    settings['max_features']=10000
+    settings['max_sentence_len_for_model'] = 1024
+    settings['max_sentence_len_for_generator'] = 32
+    settings['max_features']=15000
     settings['with_sentences']=False
     return settings
 
@@ -93,7 +99,7 @@ def prepare_objects(data, settings):
 
 def build_model(data, settings):
     sys.stdout.write('Building model\n')
-    data_input = Input(shape=(settings['max_sentence_len'],))
+    data_input = Input(shape=(settings['max_sentence_len_for_model'],))
     bucket_size_input = Input(shape=(1,),dtype="int32")
     embedding = Embedding(input_dim=settings['max_features']+3,
                           output_dim=settings['word_embedding_size'],
@@ -126,7 +132,7 @@ def build_generator_HRNN(data, settings, indexes):
             row = data['sentences'][idx]
             sentence = row['sentence']
             label = row['label']
-            if len(sentence) > settings['max_sentence_len']:
+            if len(sentence) > settings['max_sentence_len_for_generator']:
                 continue
             bucket_size = ceil((len(sentence)+1) / settings['bucket_size_step'])*settings['bucket_size_step']
             if bucket_size not in buckets:
@@ -149,7 +155,7 @@ def build_generator_HRNN(data, settings, indexes):
     return generator()
 
 def build_batch(data, settings, sentence_batch):
-    X = np.zeros((settings['batch_size'], settings['max_sentence_len']))
+    X = np.zeros((settings['batch_size'], settings['max_sentence_len_for_model']))
     Y = np.zeros((settings['batch_size'], settings['num_of_classes']), dtype=np.bool)
     for i, sentence_tuple in enumerate(sentence_batch):
         for idx, word in enumerate(sentence_tuple[0]):
@@ -157,7 +163,7 @@ def build_batch(data, settings, sentence_batch):
                 X[i][idx] = data['word_corpus_encode'][word]+1
             else:
                 X[i][idx] = settings['max_features']+1
-        X[i][min(len(sentence_tuple[0]), settings['max_sentence_len']-1)] = settings['max_features']+2
+        X[i][min(len(sentence_tuple[0]), settings['max_sentence_len_for_model']-1)] = settings['max_features']+2
         Y[i][data['labels'].index(sentence_tuple[1])] = True
     return X, Y
 
