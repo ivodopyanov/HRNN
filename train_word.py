@@ -65,15 +65,15 @@ def init_settings():
     settings = {}
     settings['word_embedding_size'] = 32
     settings['sentence_embedding_size'] = 128
-    settings['depth'] = 16
+    settings['depth'] = 8
     settings['dropout_W'] = 0.2
     settings['dropout_U'] = 0.2
     settings['hidden_dims'] = [64]
     settings['dense_dropout'] = 0.5
-    settings['bucket_size_step'] = 32
+    settings['bucket_size_step'] = 4
     settings['batch_size'] = 64
     settings['max_sentence_len_for_model'] = 1024
-    settings['max_sentence_len_for_generator'] = 32
+    settings['max_sentence_len_for_generator'] = 16
     settings['max_features']=15000
     settings['with_sentences']=False
     return settings
@@ -132,6 +132,9 @@ def build_generator_HRNN(data, settings, indexes):
             row = data['sentences'][idx]
             sentence = row['sentence']
             label = row['label']
+            if len(walk_order) == 0:
+                walk_order = list(indexes)
+                np.random.shuffle(walk_order)
             if len(sentence) > settings['max_sentence_len_for_generator']:
                 continue
             bucket_size = ceil((len(sentence)+1) / settings['bucket_size_step'])*settings['bucket_size_step']
@@ -149,9 +152,6 @@ def build_generator_HRNN(data, settings, indexes):
                     yield [X, bucket_size_input], Y, batch_sentences
                 else:
                     yield [X, bucket_size_input], Y
-            if len(walk_order) == 0:
-                walk_order = list(indexes)
-                np.random.shuffle(walk_order)
     return generator()
 
 def build_batch(data, settings, sentence_batch):
