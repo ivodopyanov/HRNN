@@ -175,7 +175,10 @@ class HRNN_encoder(Layer):
 
 
         fk_candidate = self.inner_activation(sum[:, 0])
-        fk_candidate = K.switch(mask2, 0, fk_candidate)
+
+        fk = fk_prev_tm1 + (1-fk_prev_tm1)*fk_candidate
+        fk = K.switch(mask2, 0, fk)
+
 
         # Actual new hidden state if node got info from left and from below
         h_ = self.activation(sum[:, 1:])
@@ -187,35 +190,29 @@ class HRNN_encoder(Layer):
         pad = K.tile(zeros, (1, self.input_dim))
         h_ = K.concatenate([pad, h_])
 
-        fk_prev_expanded = K.expand_dims(fk_prev)
-        fk_prev_expanded = K.repeat_elements(fk_prev_expanded, self.hidden_dim+self.input_dim, 1)
-
-        fk_candidate_expanded = K.expand_dims(fk_candidate)
-        fk_candidate_expanded = K.repeat_elements(fk_candidate_expanded, self.hidden_dim+self.input_dim, 1)
-
-        has_value_prev_expanded = K.expand_dims(has_value_prev)
-        has_value_prev_expanded = K.repeat_elements(has_value_prev_expanded, self.hidden_dim+self.input_dim, 1)
-        has_value_tm1_expanded = K.expand_dims(has_value_tm1)
-        has_value_tm1_expanded = K.repeat_elements(has_value_tm1_expanded, self.hidden_dim+self.input_dim, 1)
-
         ''' Total formula for h and FK
             If information flows from one direction only then simply propagate that value further
             (direction for propagation will be calculated on the next step)
             Otherwise - perform default recurrent computation
         '''
-        h_ = has_value_prev_expanded*has_value_tm1_expanded*h_ + \
-            (1 - has_value_prev_expanded)*has_value_tm1_expanded*h_tm1 + \
-             has_value_prev_expanded*(1-has_value_tm1_expanded)*x
-        h = fk_prev_expanded*fk_candidate_expanded*h_tm1 + \
-            (1-fk_prev_expanded)*(1-fk_candidate_expanded)*x + \
-            (1-fk_prev_expanded)*fk_candidate_expanded*h_
-        fk = fk_prev_tm1 + (1-fk_prev_tm1)*fk_candidate
 
-        has_no_value = fk_prev*(1-fk) + \
-                       fk_prev*fk*(1-has_value_tm1) + \
-                       (1-fk_prev)*(1-fk)*(1-has_value_prev) + \
-                       (1-fk_prev)*fk*(1-has_value_tm1)*(1-has_value_prev)
-        has_value = 1 - has_no_value
+        h_tm1_only = fk*(fk_prev+(1-fk_prev)*(1-has_value_prev))
+        x_only = (1-fk_prev)*(fk*(1-has_value_tm1)+(1-fk))
+        both = (1-fk_prev)*fk*has_value_tm1*has_value_prev
+
+        #h_tm1_only = Print("h_tm1_only")(h_tm1_only)
+        #x_only = Print("x_only")(x_only)
+        #both = Print("both")(both)
+
+        h_tm1_only_expanded = K.expand_dims(h_tm1_only)
+        h_tm1_only_expanded = K.repeat_elements(h_tm1_only_expanded, self.hidden_dim+self.input_dim, 1)
+        x_only_expanded = K.expand_dims(x_only)
+        x_only_expanded = K.repeat_elements(x_only_expanded, self.hidden_dim+self.input_dim, 1)
+        both_expanded = K.expand_dims(both)
+        both_expanded = K.repeat_elements(both_expanded, self.hidden_dim+self.input_dim, 1)
+
+        h = h_tm1_only_expanded*h_tm1 + x_only_expanded*x + both_expanded*h_
+        has_value = 1 - (1-h_tm1_only)*(1-x_only)*(1-both)
 
         mask_for_h = K.expand_dims(mask)
         # Apply mask

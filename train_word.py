@@ -41,6 +41,7 @@ def get_data(settings):
             sys.stdout.write("\r "+str(sentence_pos)+" / "+str(len(sentences)))
         sentence = utils.strip_trailing_quotes(sentences[sentence_pos])
         sentence = sentence.strip("\n")
+        sentence = sentence.strip(" ")
         parsed_sentence = sentence.split(" ")
         result.append({'label': labels[sentence_pos], "sentence": parsed_sentence})
         labels_set.add(labels[sentence_pos])
@@ -64,15 +65,15 @@ def get_data(settings):
 def init_settings():
     settings = {}
     settings['word_embedding_size'] = 32
-    settings['sentence_embedding_size'] = 128
-    settings['depth'] = 8
+    settings['sentence_embedding_size'] = 64
+    settings['depth'] = 4
     settings['dropout_W'] = 0.2
     settings['dropout_U'] = 0.2
     settings['hidden_dims'] = [64]
     settings['dense_dropout'] = 0.5
     settings['bucket_size_step'] = 4
     settings['batch_size'] = 1
-    settings['max_sentence_len_for_model'] = 1024
+    settings['max_sentence_len_for_model'] = 128
     settings['max_sentence_len_for_generator'] = 16
     settings['max_features']=15000
     settings['with_sentences']=False
@@ -178,7 +179,7 @@ def train(weights_filename):
     settings = init_settings()
     data, settings = get_data(settings)
     objects = prepare_objects(data, settings)
-    objects['model'].load_weights("yelpw5.h5")
+    objects['model'].load_weights("yelpw6.h5")
     sys.stdout.write('Compiling model\n')
     run_training(data, objects)
     objects['model'].save_weights(weights_filename)
