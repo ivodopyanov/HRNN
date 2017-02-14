@@ -66,7 +66,7 @@ def init_settings():
     settings = {}
     settings['word_embedding_size'] = 32
     settings['sentence_embedding_size'] = 64
-    settings['depth'] = 4
+    settings['depth'] = 8
     settings['dropout_W'] = 0.2
     settings['dropout_U'] = 0.2
     settings['hidden_dims'] = [64]

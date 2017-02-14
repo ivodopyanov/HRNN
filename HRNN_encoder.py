@@ -196,8 +196,8 @@ class HRNN_encoder(Layer):
             Otherwise - perform default recurrent computation
         '''
 
-        h_tm1_only = fk*(fk_prev+(1-fk_prev)*(1-has_value_prev))
-        x_only = (1-fk_prev)*(fk*(1-has_value_tm1)+(1-fk))
+        h_tm1_only = has_value_tm1*fk*(fk_prev+(1-fk_prev)*(1-has_value_prev))
+        x_only = has_value_prev*(1-fk_prev)*((1-fk)+fk*(1-has_value_tm1))
         both = (1-fk_prev)*fk*has_value_tm1*has_value_prev
 
         #h_tm1_only = Print("h_tm1_only")(h_tm1_only)
