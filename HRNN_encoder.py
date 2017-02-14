@@ -174,10 +174,12 @@ class HRNN_encoder(Layer):
         sum = sum1 + sum2 + self.b
 
 
-        fk_candidate = self.inner_activation(sum[:, 0])
+        fk_candidate_both = self.inner_activation(sum[:, 0])
+        fk_candidate_tm1 = self.inner_activation((sum2+self.b)[:, 0])
 
-        fk = fk_prev_tm1 + (1-fk_prev_tm1)*fk_candidate
+        fk = fk_prev_tm1 + (1-fk_prev_tm1)*(fk_tm1*fk_candidate_both+(1-fk_tm1)*fk_candidate_tm1)
         fk = K.switch(mask2, 0, fk)
+        #fk = Print("fk")(fk)
 
 
         # Actual new hidden state if node got info from left and from below
