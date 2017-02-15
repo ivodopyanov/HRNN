@@ -211,7 +211,7 @@ class HRNN_encoder(Layer):
         both_expanded = K.repeat_elements(both_expanded, self.hidden_dim+self.input_dim, 1)
 
         h = h_tm1_only_expanded*h_tm1 + x_only_expanded*x + both_expanded*h_
-        has_value = has_value_tm1 + (1-has_value_tm1)*has_value_prev*(1-fk_prev)
+        has_value = h_tm1_only + x_only + both
 
         mask_for_h = K.expand_dims(mask)
         # Apply mask
