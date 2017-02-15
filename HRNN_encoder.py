@@ -105,7 +105,7 @@ class HRNN_encoder(Layer):
 
         results, _ = T.scan(self.vertical_step,
                             sequences=[],
-                            outputs_info=[x, initial_fk, initial_fk, initial_has_value],
+                            outputs_info=[x, initial_fk, initial_has_value],
                             non_sequences=[bucket_size, initial_hor_h, initial_hor_fk, data_mask, mask2, initial_hor_has_value],
                             n_steps=self.depth)
         outputs = results[0]
@@ -115,18 +115,17 @@ class HRNN_encoder(Layer):
     # Vertical pass along hierarchy dimension
     def vertical_step(self, *args):
         x = args[0]
-        fk_prev_tm1 = args[1]
-        fk_prev = args[2]
-        has_value_prev = args[3]
-        bucket_size=args[4]
-        initial_h = args[5]
-        initial_fk=args[6]
-        mask = args[7]
-        mask2 = args[8]
-        initial_has_value = args[9]
+        fk_prev = args[1]
+        has_value_prev = args[2]
+        bucket_size=args[3]
+        initial_h = args[4]
+        initial_fk=args[5]
+        mask = args[6]
+        mask2 = args[7]
+        initial_has_value = args[8]
 
         results, _ = T.scan(self.horizontal_step,
-                            sequences=[x, fk_prev_tm1, fk_prev, mask, mask2, has_value_prev],
+                            sequences=[x, fk_prev, mask, mask2, has_value_prev],
                             outputs_info=[initial_h, initial_fk, initial_has_value],
                             n_steps=bucket_size)
         h = results[0]
@@ -143,19 +142,18 @@ class HRNN_encoder(Layer):
         #has_value = Print("has_value")(has_value)
 
 
-        return h, fk, shifted_fk, has_value
+        return h, shifted_fk, has_value
 
     # Horizontal pass along time dimension
     def horizontal_step(self, *args):
         x = args[0]
-        fk_prev_tm1 = args[1]
-        fk_prev = args[2]
-        mask = args[3]
-        mask2 = args[4]
-        has_value_prev = args[5]
-        h_tm1 = args[6]
-        fk_tm1 = args[7]
-        has_value_tm1 = args[8]
+        fk_prev = args[1]
+        mask = args[2]
+        mask2 = args[3]
+        has_value_prev = args[4]
+        h_tm1 = args[5]
+        fk_tm1 = args[6]
+        has_value_tm1 = args[7]
 
 
         if 0 < self.dropout_U < 1:
@@ -174,10 +172,9 @@ class HRNN_encoder(Layer):
         sum = sum1 + sum2 + self.b
 
 
-        fk_candidate_both = self.inner_activation(sum[:, 0])
-        fk_candidate_tm1 = self.inner_activation((sum1+self.b)[:, 0])
+        fk_candidate = self.inner_activation(sum[:, 0])
 
-        fk = fk_prev_tm1 + (1-fk_prev_tm1)*(fk_tm1*fk_candidate_both+(1-fk_tm1)*fk_candidate_tm1)
+        fk = fk_prev + (1-fk_prev)*fk_candidate
         fk = K.switch(mask2, 0, fk)
         #fk = Print("fk")(fk)
 
@@ -214,7 +211,7 @@ class HRNN_encoder(Layer):
         both_expanded = K.repeat_elements(both_expanded, self.hidden_dim+self.input_dim, 1)
 
         h = h_tm1_only_expanded*h_tm1 + x_only_expanded*x + both_expanded*h_
-        has_value = 1 - (1-h_tm1_only)*(1-x_only)*(1-both)
+        has_value = has_value_tm1 + (1-has_value_tm1)*has_value_prev*(1-fk_prev)
 
         mask_for_h = K.expand_dims(mask)
         # Apply mask

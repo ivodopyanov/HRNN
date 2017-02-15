@@ -31,8 +31,6 @@ def get_data(settings):
 
     sentences = sentences[:-1]
 
-
-
     labels_set = set()
     result = []
     print("Reading data:\n")
@@ -73,8 +71,8 @@ def init_settings():
     settings['dense_dropout'] = 0.5
     settings['bucket_size_step'] = 4
     settings['batch_size'] = 1
-    settings['max_sentence_len_for_model'] = 128
-    settings['max_sentence_len_for_generator'] = 16
+    settings['max_sentence_len_for_model'] = 1024
+    settings['max_sentence_len_for_generator'] = 64
     settings['max_features']=15000
     settings['with_sentences']=False
     return settings
