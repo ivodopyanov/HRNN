@@ -6,7 +6,7 @@ import utils
 
 
 
-def main():
+def prepare():
     text_count = [0]*5
     label_file = open(utils.LABELS_FILENAME, "wt", encoding="utf8")
     sentences_file = open(utils.SENTENCES_FILENAME, "wt", encoding="utf8")
@@ -71,9 +71,5 @@ def main():
     sentences_file.close()
     splitted_sentences_file.close()
 
-
-
-
-
 if __name__ == "__main__":
-    main()
+    prepare()
