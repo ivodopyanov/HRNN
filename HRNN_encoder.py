@@ -173,10 +173,8 @@ class HRNN_encoder(Layer):
 
 
         fk_candidate = self.inner_activation(sum[:, 0])
-
-        fk = fk_prev + (1-fk_prev)*fk_candidate
+        fk = has_value_tm1*(fk_prev + (1-fk_prev)*fk_candidate)
         fk = K.switch(mask2, 0, fk)
-        #fk = Print("fk")(fk)
 
 
         # Actual new hidden state if node got info from left and from below
@@ -198,10 +196,6 @@ class HRNN_encoder(Layer):
         h_tm1_only = has_value_tm1*fk*(fk_prev+(1-fk_prev)*(1-has_value_prev))
         x_only = has_value_prev*(1-fk_prev)*((1-fk)+fk*(1-has_value_tm1))
         both = (1-fk_prev)*fk*has_value_tm1*has_value_prev
-
-        #h_tm1_only = Print("h_tm1_only")(h_tm1_only)
-        #x_only = Print("x_only")(x_only)
-        #both = Print("both")(both)
 
         h_tm1_only_expanded = K.expand_dims(h_tm1_only)
         h_tm1_only_expanded = K.repeat_elements(h_tm1_only_expanded, self.hidden_dim+self.input_dim, 1)
