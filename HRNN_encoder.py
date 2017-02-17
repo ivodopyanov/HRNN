@@ -138,8 +138,8 @@ class HRNN_encoder(Layer):
         shifted_fk = K.concatenate([fk[1:], last_fk], axis=0)
         shifted_fk = TS.unbroadcast(shifted_fk, 0, 1)
         # Uncomment to monitor FK values during testing
-        shifted_fk = Print("shifted_fk")(shifted_fk)
-        has_value = Print("has_value")(has_value)
+        #shifted_fk = Print("shifted_fk")(shifted_fk)
+        #has_value = Print("has_value")(has_value)
 
 
         return h, shifted_fk, has_value
@@ -167,17 +167,26 @@ class HRNN_encoder(Layer):
         else:
             B_W = K.cast_to_floatx(1.)
 
-        sum1 = self.ln(K.dot(x*B_W, self.W), self.gammas[0], self.betas[0])
+        fk_prev_expanded = K.expand_dims(fk_prev)
+        fk_prev_expanded = K.repeat_elements(fk_prev_expanded, self.hidden_dim+self.input_dim, 1)
+
+
+        sum1 = self.ln(K.dot((1-fk_prev_expanded)*x*B_W, self.W), self.gammas[0], self.betas[0])
         sum2 = self.ln(K.dot(h_tm1*B_U, self.U), self.gammas[1], self.betas[1])
-        sum = sum1 + sum2 + self.b
+        sum_fk = sum1 + sum2 + self.b
 
-
-        fk_candidate = self.inner_activation(sum[:, 0])
-        fk = has_value_tm1*(fk_prev + (1-fk_prev)*fk_candidate)
+        fk_candidate = self.inner_activation(sum_fk[:,0])
+        fk = fk_candidate
         fk = K.switch(mask2, 0, fk)
+
+        fk_expanded = K.expand_dims(fk)
+        fk_expanded = K.repeat_elements(fk_expanded, self.hidden_dim+self.input_dim, 1)
+
+        sum2_withfk = self.ln(K.dot(fk_expanded*h_tm1*B_U, self.U), self.gammas[1], self.betas[1])
 
 
         # Actual new hidden state if node got info from left and from below
+        sum = sum1 + sum2_withfk + self.b
         h_ = self.activation(sum[:, 1:])
 
         # Pad with zeros in front

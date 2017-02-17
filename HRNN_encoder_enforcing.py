@@ -142,7 +142,7 @@ class HRNN_encoder(Layer):
         shifted_fk = K.concatenate([fk[1:], last_fk], axis=0)
         shifted_fk = TS.unbroadcast(shifted_fk, 0, 1)
         # Uncomment to monitor FK values during testing
-        #shifted_fk = Print("shifted_fk")(shifted_fk)
+        shifted_fk = Print("shifted_fk")(shifted_fk)
         #has_value = Print("has_value")(has_value)
 
 
@@ -176,8 +176,11 @@ class HRNN_encoder(Layer):
         sum = sum1 + sum2 + self.b
 
 
-        fk_candidate = self.inner_activation(sum[:, 0])
+        fk_candidate = TS.sgn(self.inner_activation(sum[:, 0]))
+        fk_candidate = Print("fk_candidate")(fk_candidate)
+        fk_prev = Print("fk_prev")(fk_prev)
         fk = has_value_tm1*(fk_prev + (1-fk_prev)*fk_candidate)
+        fk = Print("fk")(fk)
         fk = K.switch(mask2, 0, fk)
 
 

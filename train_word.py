@@ -70,7 +70,7 @@ def init_settings():
     settings['hidden_dims'] = [64]
     settings['dense_dropout'] = 0.5
     settings['bucket_size_step'] = 4
-    settings['batch_size'] = 1
+    settings['batch_size'] = 8
     settings['max_sentence_len_for_model'] = 128
     settings['max_sentence_len_for_generator'] = 16
     settings['max_features']=15000
@@ -178,7 +178,7 @@ def train(weights_filename):
     settings = init_settings()
     data, settings = get_data(settings)
     objects = prepare_objects(data, settings)
-    objects['model'].load_weights("sttw3.h5")
+    #objects['model'].load_weights("sttw3.h5")
     sys.stdout.write('Compiling model\n')
     run_training(data, objects)
     objects['model'].save_weights(weights_filename)
