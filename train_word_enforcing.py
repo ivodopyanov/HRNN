@@ -12,7 +12,7 @@ from keras.optimizers import Adam
 from keras.callbacks import LearningRateScheduler
 
 
-from HRNN_encoder import HRNN_encoder
+from HRNN_encoder_enforcing import HRNN_encoder
 import utils
 
 
@@ -70,7 +70,7 @@ def init_settings():
     settings['hidden_dims'] = [64]
     settings['dense_dropout'] = 0.5
     settings['bucket_size_step'] = 4
-    settings['batch_size'] = 1
+    settings['batch_size'] = 8
     settings['max_sentence_len_for_model'] = 128
     settings['max_sentence_len_for_generator'] = 16
     settings['max_features']=15000
@@ -109,16 +109,16 @@ def build_model(data, settings):
                               dropout_W = settings['dropout_W'],
                               dropout_U = settings['dropout_U'],
                               name='encoder')([embedding, bucket_size_input])
-    layer = encoder
+    layer = encoder[0]
 
     for hidden_dim in settings['hidden_dims']:
         layer = Dense(hidden_dim)(layer)
         layer = Activation('tanh')(layer)
         layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(input=[data_input, bucket_size_input], output=output)
+    model = Model(input=[data_input, bucket_size_input], output=[output, encoder[1]])
     optimizer = Adam(lr=0.001, clipnorm=5)
-    model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=['accuracy'])
+    model.compile(loss={'output': "categorical_crossentropy", 'encoder': "mse"}, optimizer=optimizer, metrics={'output':'accuracy'})
     return model
 
 def build_generator_HRNN(data, settings, indexes):
@@ -148,9 +148,9 @@ def build_generator_HRNN(data, settings, indexes):
                 bucket_size_input = np.zeros((settings['batch_size'],1), dtype=int)
                 bucket_size_input[0][0]=bucket_size
                 if settings['with_sentences']:
-                    yield [X, bucket_size_input], Y, batch_sentences
+                    yield [X, bucket_size_input], [Y, np.zeros((settings['batch_size'], settings['depth']))], batch_sentences
                 else:
-                    yield [X, bucket_size_input], Y
+                    yield [X, bucket_size_input], [Y, np.zeros((settings['batch_size'], settings['depth']))]
     return generator()
 
 def build_batch(data, settings, sentence_batch):
@@ -178,7 +178,7 @@ def train(weights_filename):
     settings = init_settings()
     data, settings = get_data(settings)
     objects = prepare_objects(data, settings)
-    objects['model'].load_weights("sttw3.h5")
+    #objects['model'].load_weights("sttw3.h5")
     sys.stdout.write('Compiling model\n')
     run_training(data, objects)
     objects['model'].save_weights(weights_filename)

@@ -53,10 +53,10 @@ class HRNN_encoder(Layer):
         self.built = True
 
     def compute_mask(self, input, input_mask=None):
-        return None
+        return [None, None]
 
     def get_output_shape_for(self, input_shape):
-        return (input_shape[0][0], self.hidden_dim)
+        return [(input_shape[0][0], self.hidden_dim), (input_shape[0][0], self.depth)]
 
 
     def call(self, input, mask=None):
@@ -110,7 +110,11 @@ class HRNN_encoder(Layer):
                             n_steps=self.depth)
         outputs = results[0]
         outputs = outputs[-1,-1,:,self.input_dim:]
-        return outputs
+        fk = results[1]
+        fk = 2*(0.5 - K.abs(fk - 0.5))
+        fk = K.sum(fk, 1)/bucket_size
+        fk = fk.dimshuffle([1,0])
+        return [outputs, fk]
 
     # Vertical pass along hierarchy dimension
     def vertical_step(self, *args):
@@ -138,8 +142,8 @@ class HRNN_encoder(Layer):
         shifted_fk = K.concatenate([fk[1:], last_fk], axis=0)
         shifted_fk = TS.unbroadcast(shifted_fk, 0, 1)
         # Uncomment to monitor FK values during testing
-        shifted_fk = Print("shifted_fk")(shifted_fk)
-        has_value = Print("has_value")(has_value)
+        #shifted_fk = Print("shifted_fk")(shifted_fk)
+        #has_value = Print("has_value")(has_value)
 
 
         return h, shifted_fk, has_value

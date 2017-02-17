@@ -7,7 +7,7 @@ import theano.tensor as TS
 from theano.printing import Print
 
 
-class HRNN_encoder(Layer):
+class HRNN_AE(Layer):
     def __init__(self, input_dim, hidden_dim, depth, dropout_W, dropout_U,
                  init='glorot_uniform', inner_init='orthogonal',
                  activation='tanh', inner_activation='hard_sigmoid',
@@ -39,7 +39,7 @@ class HRNN_encoder(Layer):
 
         if self.dropout_W or self.dropout_U:
             self.uses_learning_phase = True
-        super(HRNN_encoder, self).__init__(**kwargs)
+        super(HRNN_AE, self).__init__(**kwargs)
 
 
 
@@ -103,49 +103,138 @@ class HRNN_encoder(Layer):
         mask2 = K.concatenate([first_mask, mask2], axis=0)
         #mask2 = 1, if that sentence is over. That param required for making FK = 0 at the end of each sentence
 
-        results, _ = T.scan(self.vertical_step,
+        results, _ = T.scan(self.vertical_step_encoder,
                             sequences=[],
                             outputs_info=[x, initial_fk, initial_has_value],
                             non_sequences=[bucket_size, initial_hor_h, initial_hor_fk, data_mask, mask2, initial_hor_has_value],
                             n_steps=self.depth)
         outputs = results[0]
-        outputs = outputs[-1,-1,:,self.input_dim:]
-        return outputs
-
-    # Vertical pass along hierarchy dimension
-    def vertical_step(self, *args):
-        x = args[0]
-        fk_prev = args[1]
-        has_value_prev = args[2]
-        bucket_size=args[3]
-        initial_h = args[4]
-        initial_fk=args[5]
-        mask = args[6]
-        mask2 = args[7]
-        initial_has_value = args[8]
-
-        results, _ = T.scan(self.horizontal_step,
-                            sequences=[x, fk_prev, mask, mask2, has_value_prev],
-                            outputs_info=[initial_h, initial_fk, initial_has_value],
-                            n_steps=bucket_size)
-        h = results[0]
         fk = results[1]
         has_value = results[2]
+        sentence_embeddings = outputs[-1,-1,:,self.input_dim:]
+        sentence_embeddings = K.repeat(sentence_embeddings, bucket_size)
 
-        #Shift computed FK for 1 step left because at the step i we compute FK for i-1
-        last_fk = K.zeros_like(fk[0])
-        last_fk = K.expand_dims(last_fk, 0)
-        shifted_fk = K.concatenate([fk[1:], last_fk], axis=0)
-        shifted_fk = TS.unbroadcast(shifted_fk, 0, 1)
-        # Uncomment to monitor FK values during testing
-        shifted_fk = Print("shifted_fk")(shifted_fk)
-        has_value = Print("has_value")(has_value)
+        results, _ = T.scan(self.vertical_step_decoder,
+                            sequences=[fk, has_value],
+                            outputs_info=[sentence_embeddings, initial_hor_h],
+                            non_sequences=[bucket_size])
+        y = results[-1,:,:,:]
+        y = y.dimshuffle([1,0,2])
+        return y
 
+    # Vertical pass along hierarchy dimension
+    def vertical_step_encoder(self, *args):
+        fk = args[0]
+        has_value = args[1]
+        x = args[2]
+        bucket_size = args[3]
+        initial_h = args[4]
 
-        return h, shifted_fk, has_value
+        results, _ = T.scan(self.horizontal_step_encoder,
+                            sequences=[x, fk, has_value],
+                            outputs_info=[initial_h],
+                            n_steps=bucket_size)
+        h = results
+
+        return h
 
     # Horizontal pass along time dimension
-    def horizontal_step(self, *args):
+    def horizontal_step_encoder(self, *args):
+        x = args[0]
+        fk_prev = args[1]
+        mask = args[2]
+        mask2 = args[3]
+        has_value_prev = args[4]
+        h_tm1 = args[5]
+        fk_tm1 = args[6]
+        has_value_tm1 = args[7]
+
+
+        if 0 < self.dropout_U < 1:
+            ones = K.ones((self.input_dim+self.hidden_dim))
+            B_U = K.in_train_phase(K.dropout(ones, self.dropout_U), ones)
+        else:
+            B_U = K.cast_to_floatx(1.)
+        if 0 < self.dropout_W < 1:
+            ones = K.ones((self.input_dim+self.hidden_dim))
+            B_W = K.in_train_phase(K.dropout(ones, self.dropout_W), ones)
+        else:
+            B_W = K.cast_to_floatx(1.)
+
+        sum1 = self.ln(K.dot(x*B_W, self.W), self.gammas[0], self.betas[0])
+        sum2 = self.ln(K.dot(h_tm1*B_U, self.U), self.gammas[1], self.betas[1])
+        sum = sum1 + sum2 + self.b
+
+
+        fk_candidate = self.inner_activation(sum[:, 0])
+        fk = has_value_tm1*(fk_prev + (1-fk_prev)*fk_candidate)
+        fk = K.switch(mask2, 0, fk)
+
+
+        # Actual new hidden state if node got info from left and from below
+        h_ = self.activation(sum[:, 1:])
+
+        # Pad with zeros in front
+        zeros = K.zeros_like(h_)
+        zeros = K.sum(zeros, axis=(1))
+        zeros = K.expand_dims(zeros)
+        pad = K.tile(zeros, (1, self.input_dim))
+        h_ = K.concatenate([pad, h_])
+
+        ''' Total formula for h and FK
+            If information flows from one direction only then simply propagate that value further
+            (direction for propagation will be calculated on the next step)
+            Otherwise - perform default recurrent computation
+        '''
+
+        h_tm1_only = has_value_tm1*fk*(fk_prev+(1-fk_prev)*(1-has_value_prev))
+        x_only = has_value_prev*(1-fk_prev)*((1-fk)+fk*(1-has_value_tm1))
+        both = (1-fk_prev)*fk*has_value_tm1*has_value_prev
+
+        h_tm1_only_expanded = K.expand_dims(h_tm1_only)
+        h_tm1_only_expanded = K.repeat_elements(h_tm1_only_expanded, self.hidden_dim+self.input_dim, 1)
+        x_only_expanded = K.expand_dims(x_only)
+        x_only_expanded = K.repeat_elements(x_only_expanded, self.hidden_dim+self.input_dim, 1)
+        both_expanded = K.expand_dims(both)
+        both_expanded = K.repeat_elements(both_expanded, self.hidden_dim+self.input_dim, 1)
+
+        h = h_tm1_only_expanded*h_tm1 + x_only_expanded*x + both_expanded*h_
+        has_value = h_tm1_only + x_only + both
+
+        mask_for_h = K.expand_dims(mask)
+        # Apply mask
+        h = K.switch(mask_for_h, h, h_tm1)
+        fk = K.switch(mask, fk, fk_tm1)
+        has_value = K.switch(mask, has_value, has_value_tm1)
+        # Make FK = 0 if that's last element of sequence
+        fk = K.switch(mask2, 0, fk)
+
+        result = [h, fk, has_value]
+        return result
+
+
+
+
+    # Vertical pass along hierarchy dimension
+    def vertical_step_decoder(self, *args):
+        x = args[0]
+        fk = args[1]
+        has_value = args[2]
+        bucket_size=args[3]
+        initial_h = args[4]
+        mask = args[6]
+        mask2 = args[7]
+
+        results, _ = T.scan(self.horizontal_step_decoder,
+                            sequences=[x, fk, mask, mask2, has_value],
+                            outputs_info=[initial_h],
+                            n_steps=bucket_size)
+        h = results[0]
+
+        return h
+
+    # Horizontal pass along time dimension
+    def horizontal_step_decoder(self, *args):
         x = args[0]
         fk_prev = args[1]
         mask = args[2]
@@ -239,5 +328,5 @@ class HRNN_encoder(Layer):
                   'inner_activation': self.inner_activation.__name__,
                   'dropout_W': self.dropout_W,
                   'dropout_U': self.dropout_U}
-        base_config = super(HRNN_encoder, self).get_config()
+        base_config = super(HRNN_AE, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
