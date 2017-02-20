@@ -100,7 +100,7 @@ class HRNN_encoder(Layer):
         first_mask = K.expand_dims(first_mask, 0)
         mask2 = K.concatenate([data_mask[1:], first_mask], axis=0)
         mask2 = data_mask*(1-mask2)
-        mask2 = K.concatenate([first_mask, mask2], axis=0)
+        #mask2 = K.concatenate([first_mask, mask2], axis=0)
         #mask2 = 1, if that sentence is over. That param required for making FK = 0 at the end of each sentence
         mask3 = [0]*self.depth
         mask3[self.depth-1] = 1
@@ -230,10 +230,6 @@ class HRNN_encoder(Layer):
         h = K.switch(mask_for_h, h, h_tm1)
         fk = K.switch(mask, fk, fk_tm1)
         has_value = K.switch(mask, has_value, has_value_tm1)
-        # Make FK = 1 if that's last row
-        fk = K.switch(mask3, 1, fk)
-        # Make FK = 0 if that's last element of sequence
-        fk = K.switch(mask2, 0, fk)
 
         result = [h, fk, has_value]
         return result
