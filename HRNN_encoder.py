@@ -175,7 +175,7 @@ class HRNN_encoder(Layer):
             B_W = K.cast_to_floatx(1.)
 
         fk_prev_expanded = K.expand_dims(fk_prev)
-        fk_prev_expanded = K.repeat_elements(fk_prev_expanded, self.hidden_dim, 1)
+        fk_prev_expanded = K.repeat_elements(fk_prev_expanded, self.hidden_dim+1, 1)
 
 
         sum1 = (1-fk_prev_expanded)*self.ln(K.dot(x*B_W, self.W), self.gammas[0], self.betas[0])
@@ -189,7 +189,7 @@ class HRNN_encoder(Layer):
 
 
         fk_expanded = K.expand_dims(fk)
-        fk_expanded = K.repeat_elements(fk_expanded, self.hidden_dim, 1)
+        fk_expanded = K.repeat_elements(fk_expanded, self.hidden_dim+1, 1)
 
         sum2_withfk = fk_expanded*self.ln(K.dot(h_tm1*B_U, self.U), self.gammas[1], self.betas[1])
 
