@@ -183,7 +183,7 @@ class HRNN_encoder(Layer):
         sum_fk = sum1 + sum2 + self.b
 
         fk_candidate = self.inner_activation(sum_fk[:,0])
-        fk = fk_candidate
+        fk = fk_prev + (1-fk_prev)*fk_candidate
         fk = K.switch(mask3, 1, fk)
         fk = K.switch(mask2, 0, fk)
 
