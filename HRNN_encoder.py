@@ -175,10 +175,10 @@ class HRNN_encoder(Layer):
             B_W = K.cast_to_floatx(1.)
 
         fk_prev_expanded = K.expand_dims(fk_prev)
-        fk_prev_expanded = K.repeat_elements(fk_prev_expanded, self.hidden_dim+self.input_dim, 1)
+        fk_prev_expanded = K.repeat_elements(fk_prev_expanded, self.hidden_dim, 1)
 
 
-        sum1 = self.ln(K.dot((1-fk_prev_expanded)*x*B_W, self.W), self.gammas[0], self.betas[0])
+        sum1 = (1-fk_prev_expanded)*self.ln(K.dot(x*B_W, self.W), self.gammas[0], self.betas[0])
         sum2 = self.ln(K.dot(h_tm1*B_U, self.U), self.gammas[1], self.betas[1])
         sum_fk = sum1 + sum2 + self.b
 
@@ -189,9 +189,9 @@ class HRNN_encoder(Layer):
 
 
         fk_expanded = K.expand_dims(fk)
-        fk_expanded = K.repeat_elements(fk_expanded, self.hidden_dim+self.input_dim, 1)
+        fk_expanded = K.repeat_elements(fk_expanded, self.hidden_dim, 1)
 
-        sum2_withfk = self.ln(K.dot(fk_expanded*h_tm1*B_U, self.U), self.gammas[1], self.betas[1])
+        sum2_withfk = fk_expanded*self.ln(K.dot(h_tm1*B_U, self.U), self.gammas[1], self.betas[1])
 
 
         # Actual new hidden state if node got info from left and from below
