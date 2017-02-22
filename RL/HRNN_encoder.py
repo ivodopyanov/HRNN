@@ -2,7 +2,6 @@ import keras.backend as K
 from keras.layers import initializations, activations
 from keras.engine import Layer
 
-import numpy as np
 import theano as T
 import theano.tensor as TS
 from theano.printing import Print
@@ -37,7 +36,6 @@ class HRNN_encoder(Layer):
         self.gamma_init = initializations.get('one')
         self.beta_init = initializations.get('zero')
         self.epsilon = 1e-5
-        self.set_mode(0)
 
         if self.dropout_W or self.dropout_U:
             self.uses_learning_phase = True
@@ -46,46 +44,17 @@ class HRNN_encoder(Layer):
 
 
     def build(self, input_shape):
-        self.W = self.init((self.input_dim+self.hidden_dim, self.hidden_dim+1), name='{}_W'.format(self.name))
-        self.U = self.inner_init((self.input_dim+self.hidden_dim, self.hidden_dim+1), name='{}_U'.format(self.name))
-        self.b = K.zeros((self.hidden_dim+1), name='{}_b'.format(self.name))
-        self.gammas = K.ones((2, self.hidden_dim+1), name="gammas")
-        self.betas = K.zeros((2, self.hidden_dim+1), name="betas")
-        self.trainable_weights = [self.W ,self.U , self.b, self.gammas, self.betas]
-        self.built = True
 
-    def set_mode(self, mode):
-        self.mode = mode
+        self.W = self.init((self.input_dim+self.hidden_dim, self.hidden_dim), name='{}_W'.format(self.name))
+        self.U = self.inner_init((self.input_dim+self.hidden_dim, self.hidden_dim), name='{}_U'.format(self.name))
+        self.b = K.zeros((self.hidden_dim), name='{}_b'.format(self.name))
+        self.W_FK = self.init((self.input_dim+self.hidden_dim, 1), name='{}_W_FK'.format(self.name))
+        self.U_FK = self.inner_init((self.input_dim+self.hidden_dim, 1), name='{}_U_FK'.format(self.name))
+        self.b_FK = K.zeros((1,), name='{}_b_FK'.format(self.name))
         self.gammas = K.ones((2, self.hidden_dim), name="gammas")
         self.betas = K.zeros((2, self.hidden_dim), name="betas")
-        if mode == 0:
-            self.W = self.init((self.input_dim+self.hidden_dim, self.hidden_dim), name='{}_W'.format(self.name))
-            self.U = self.inner_init((self.input_dim+self.hidden_dim, self.hidden_dim), name='{}_U'.format(self.name))
-            self.b = K.zeros((self.hidden_dim), name='{}_b'.format(self.name))
-            self.W_FK = self.init_constant((self.input_dim+self.hidden_dim, 1), name='{}_W_FK'.format(self.name))
-            self.U_FK = self.init_constant((self.input_dim+self.hidden_dim, 1), name='{}_U_FK'.format(self.name))
-            self.b_FK = TS.constant(np.zeros((1,)), name='{}_b_FK'.format(self.name))
-        else:
-            self.W = self.init_constant((self.input_dim+self.hidden_dim, self.hidden_dim), name='{}_W'.format(self.name))
-            self.U = self.init_constant((self.input_dim+self.hidden_dim, self.hidden_dim), name='{}_U'.format(self.name))
-            self.b = TS.constant(np.zeros((self.hidden_dim,)), name='{}_b'.format(self.name))
-            self.W_FK = self.init((self.input_dim+self.hidden_dim, 1), name='{}_W_FK'.format(self.name))
-            self.U_FK = self.inner_init((self.input_dim+self.hidden_dim, 1), name='{}_U_FK'.format(self.name))
-            self.b_FK = K.zeros((1,), name='{}_b_FK'.format(self.name))
-
-    def init_constant(self, shp, name=None, dim_ordering='th'):
-        fan_in, fan_out = initializations.get_fans(shp, dim_ordering=dim_ordering)
-        s = np.sqrt(2. / (fan_in + fan_out))
-        return TS.constant(np.random.normal(loc=0.0, scale=s, size=shp))
-
-    def copy_weights(self, source):
-        self.W.set_value(source.W.get_value())
-        self.U.set_value(source.U.get_value())
-        self.b.set_value(source.b.get_value())
-        self.W_FK.set_value(source.W_FK.get_value())
-        self.U_FK.set_value(source.U_FK.get_value())
-        self.b_FK.set_value(source.b_FK.get_value())
-
+        self.trainable_weights = [self.W ,self.U , self.b, self.W_FK, self.U_FK, self.b_FK, self.gammas, self.betas]
+        self.built = True
 
     def compute_mask(self, input, input_mask=None):
         return None
@@ -116,14 +85,17 @@ class HRNN_encoder(Layer):
         pad = K.tile(pad, (1, self.hidden_dim))
         x = K.concatenate([x, pad])
 
-        initial_hor_fk = K.sum(K.zeros_like(x), axis=(1,2))
+        batch_size = K.sum(K.zeros_like(x), axis=(1,2))
+        initial_hor_fk = K.expand_dims(batch_size)
+        initial_hor_fk = TS.unbroadcast(initial_hor_fk, 0, 1)
 
         x = x.dimshuffle([1,0,2])
         x = x[:bucket_size]
         x = TS.unbroadcast(x, 0,1,2)
         initial_fk = K.zeros_like(x)
         initial_fk = K.sum(initial_fk, axis=(2))
-        initial_fk = TS.unbroadcast(initial_fk, 0, 1)
+        initial_fk = K.expand_dims(initial_fk)
+        initial_fk = TS.unbroadcast(initial_fk, 0, 1, 2)
         initial_has_value = K.ones_like(initial_fk)
         initial_hor_h = K.zeros_like(x[0])
         initial_hor_h = TS.unbroadcast(initial_hor_h, 0, 1)
@@ -131,16 +103,23 @@ class HRNN_encoder(Layer):
         data_mask = data_mask[:bucket_size]
 
 
+
         first_mask = K.zeros_like(data_mask[0])
         first_mask = K.expand_dims(first_mask, 0)
         mask2 = K.concatenate([data_mask[1:], first_mask], axis=0)
         mask2 = data_mask*(1-mask2)
+        mask2 = K.expand_dims(mask2)
         #mask2 = K.concatenate([first_mask, mask2], axis=0)
         #mask2 = 1, if that sentence is over. That param required for making FK = 0 at the end of each sentence
-        mask3 = [0]*self.depth
-        mask3[self.depth-1] = 1
-        mask3 = TS.constant(mask3)
-
+        batch_zeros = TS.zeros_like(batch_size)
+        batch_ones = TS.ones_like(batch_size)
+        mask3 = K.expand_dims(batch_zeros)
+        mask3 = K.repeat(mask3, self.depth-1)
+        batch_ones = K.expand_dims(batch_ones)
+        batch_ones = K.expand_dims(batch_ones)
+        mask3 = K.concatenate([mask3, batch_ones], axis=1)
+        mask3 = mask3.dimshuffle([1,0,2])
+        data_mask = K.expand_dims(data_mask)
 
         results, _ = T.scan(self.vertical_step,
                             sequences=[mask3],
@@ -179,7 +158,7 @@ class HRNN_encoder(Layer):
         shifted_fk = K.concatenate([fk[1:], last_fk], axis=0)
         shifted_fk = TS.unbroadcast(shifted_fk, 0, 1)
         # Uncomment to monitor FK values during testing
-        shifted_fk = Print("shifted_fk")(shifted_fk)
+        #shifted_fk = Print("shifted_fk")(shifted_fk)
         #has_value = Print("has_value")(has_value)
 
 
@@ -209,6 +188,7 @@ class HRNN_encoder(Layer):
         else:
             B_W = K.cast_to_floatx(1.)
 
+
         sum1_fk = (1-fk_prev)*K.dot(x, self.W_FK)
         sum2_fk = K.dot(h_tm1, self.U_FK)
         sum_fk = sum1_fk + sum2_fk + self.b_FK
@@ -219,17 +199,15 @@ class HRNN_encoder(Layer):
         fk = K.switch(mask2, 0, fk)
 
 
-        fk_expanded = K.expand_dims(fk)
-        fk_expanded = K.repeat_elements(fk_expanded, self.hidden_dim, 1)
+        fk_prev_expanded = K.repeat_elements(fk_prev, self.hidden_dim, 1)
+        fk_expanded = K.repeat_elements(fk, self.hidden_dim, 1)
 
-        sum1_fk = self.ln(K.dot(x*B_W, self.W), self.gammas[0], self.betas[0])
-
-        sum2_withfk = fk_expanded*self.ln(K.dot(h_tm1*B_U, self.U), self.gammas[1], self.betas[1])
-
+        sum1 = (1-fk_prev_expanded)*self.ln(K.dot(x*B_W, self.W), self.gammas[0], self.betas[0])
+        sum2 = fk_expanded*self.ln(K.dot(h_tm1*B_U, self.U), self.gammas[1], self.betas[1])
 
         # Actual new hidden state if node got info from left and from below
-        sum = sum1 + sum2_withfk + self.b
-        h_ = self.activation(sum[:, 1:])
+        sum = sum1 + sum2 + self.b
+        h_ = self.activation(sum)
 
         # Pad with zeros in front
         zeros = K.zeros_like(h_)
@@ -248,19 +226,15 @@ class HRNN_encoder(Layer):
         x_only = has_value_prev*(1-fk_prev)*((1-fk)+fk*(1-has_value_tm1))
         both = (1-fk_prev)*fk*has_value_tm1*has_value_prev
 
-        h_tm1_only_expanded = K.expand_dims(h_tm1_only)
-        h_tm1_only_expanded = K.repeat_elements(h_tm1_only_expanded, self.hidden_dim+self.input_dim, 1)
-        x_only_expanded = K.expand_dims(x_only)
-        x_only_expanded = K.repeat_elements(x_only_expanded, self.hidden_dim+self.input_dim, 1)
-        both_expanded = K.expand_dims(both)
-        both_expanded = K.repeat_elements(both_expanded, self.hidden_dim+self.input_dim, 1)
+        h_tm1_only_expanded = K.repeat_elements(h_tm1_only, self.hidden_dim+self.input_dim, 1)
+        x_only_expanded = K.repeat_elements(x_only, self.hidden_dim+self.input_dim, 1)
+        both_expanded = K.repeat_elements(both, self.hidden_dim+self.input_dim, 1)
 
         h = h_tm1_only_expanded*h_tm1 + x_only_expanded*x + both_expanded*h_
         has_value = h_tm1_only + x_only + both
 
-        mask_for_h = K.expand_dims(mask)
         # Apply mask
-        h = K.switch(mask_for_h, h, h_tm1)
+        h = K.switch(mask, h, h_tm1)
         fk = K.switch(mask, fk, fk_tm1)
         has_value = K.switch(mask, has_value, has_value_tm1)
 
