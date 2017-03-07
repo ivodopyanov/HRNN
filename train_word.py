@@ -64,17 +64,17 @@ def get_data(settings):
 
 def init_settings():
     settings = {}
-    settings['word_embedding_size'] = 32
+    settings['word_embedding_size'] = 64
     settings['sentence_embedding_size'] = 64
-    settings['depth'] = 10
+    settings['depth'] = 8
     settings['action_dim'] = 128
     settings['dropout_W'] = 0.2
     settings['dropout_U'] = 0.2
     settings['hidden_dims'] = [64]
     settings['dense_dropout'] = 0.5
     settings['bucket_size_step'] = 4
-    settings['batch_size'] = 8
-    settings['max_len'] = 32
+    settings['batch_size'] = 6
+    settings['max_len'] = 128
     settings['max_features']=10000
     settings['with_sentences']=False
     settings['epochs'] = 50
@@ -226,7 +226,7 @@ def run_training_RL(data, objects, settings):
     encoder = objects['encoder']
     predictor = objects['predictor']
     rl_model = objects['rl_model']
-    epoch_size = int(len(objects['train_indexes'])/(100*settings['batch_size']))
+    epoch_size = int(len(objects['train_indexes'])/(10*settings['batch_size']))
 
     for epoch in range(settings['epochs']):
         sys.stdout.write("\nEpoch {}\n".format(epoch))

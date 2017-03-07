@@ -134,10 +134,13 @@ class Predictor(Layer):
         initial_action_calculated = K.zeros((self.batch_size), dtype="int8")
         initial_policy = K.zeros((self.batch_size, 2))
 
+        shifted_data_mask = K.concatenate([K.ones((1, self.batch_size)), data_mask[:-1]], axis=0)
+        shifted_eos_mask = K.concatenate([K.zeros((1, self.batch_size)), eos_mask[:-1]], axis=0)
+
 
 
         results, _ = T.scan(self.horizontal_step,
-                            sequences=[x, action_prev, data_mask, eos_mask],
+                            sequences=[x, action_prev, shifted_data_mask, data_mask, shifted_eos_mask, eos_mask],
                             outputs_info=[initial_h, initial_action, initial_data_mask, initial_action_calculated, initial_policy],
                             non_sequences=[last_layer_mask3],
                             n_steps=bucket_size)
@@ -153,9 +156,8 @@ class Predictor(Layer):
         shifted_action = K.concatenate([action[1:], last_action], axis=0)
         shifted_action = TS.unbroadcast(shifted_action, 0, 1)
         # Uncomment to monitor FK values during testing
-        #shifted_fk = Print("shifted_fk")(shifted_fk)
-        #has_value = Print("has_value")(has_value)
-        #fk_calculated = Print("fk_calculated")(fk_calculated)
+        #shifted_action = Print("shifted_action")(shifted_action)
+        #new_data_mask = Print("new_data_mask")(new_data_mask)
         policy_input_x = x
         policy_input_h = K.concatenate([K.zeros((1, self.batch_size, self.hidden_dim)), h[1:]], axis=0)
 
@@ -165,15 +167,16 @@ class Predictor(Layer):
     def horizontal_step(self, *args):
         x = args[0]
         action_prev = args[1]
-        data_mask_prev = args[2]
-        eos_mask = args[3]
-        h_tm1 = args[4]
-        action_tm1 = args[5]
-        data_mask_tm1 = args[6]
-        action_calculated_tm1 = args[7]
-        policy_tm1 = args[8]
-        last_layer_mask3 = args[9]
-
+        data_mask_prev_tm1 = args[2]
+        data_mask_prev = args[3]
+        eos_mask_tm1 = args[4]
+        eos_mask = args[5]
+        h_tm1 = args[6]
+        action_tm1 = args[7]
+        data_mask_tm1 = args[8]
+        action_calculated_tm1 = args[9]
+        policy_tm1 = args[10]
+        last_layer_mask3 = args[11]
 
 
         policy = activations.relu(K.dot(x, self.W_action_1) + K.dot(h_tm1, self.U_action_1) + self.b_action_1)
@@ -182,10 +185,10 @@ class Predictor(Layer):
         action = K.switch(TS.ge(policy[:,0], policy[:, 1]), 1, 0)
         action = K.switch(action_prev, 1, action)
         action = K.switch(last_layer_mask3, 1, action)
-        action = K.switch(eos_mask, 0, action)
+        action = K.switch(eos_mask_tm1, 0, action)
         action = TS.cast(action, "int8")
 
-        action_calculated = data_mask_tm1*(1-last_layer_mask3)*(1-eos_mask)*(1-action_prev)
+        action_calculated = data_mask_prev_tm1*(1-last_layer_mask3)*(1-eos_mask_tm1)*(1-action_prev)
         action_calculated = TS.cast(action_calculated, "int8")
 
         # Actual new hidden state if node got info from left and from below
@@ -212,7 +215,7 @@ class Predictor(Layer):
 
         # Apply mask
 
-        action = K.switch(data_mask_prev, action, action_tm1)
+        action = K.switch(data_mask_prev_tm1, action, action_tm1)
         data_mask = data_mask_prev*data_mask
         data_mask_prev = data_mask_prev.dimshuffle([0,'x'])
         data_mask_prev = TS.extra_ops.repeat(data_mask_prev, self.hidden_dim, axis=1)
