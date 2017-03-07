@@ -227,6 +227,7 @@ def run_training_RL(data, objects, settings):
     predictor = objects['predictor']
     rl_model = objects['rl_model']
     epoch_size = int(len(objects['train_indexes'])/(10*settings['batch_size']))
+    val_epoch_size = int(len(objects['val_indexes'])/(10*settings['batch_size']))
 
     for epoch in range(settings['epochs']):
         sys.stdout.write("\nEpoch {}\n".format(epoch))
@@ -284,6 +285,18 @@ def run_training_RL(data, objects, settings):
                                      np.sum(loss1_total)/len(loss1_total),
                                      np.sum(acc_total)/len(acc_total),
                                      np.sum(loss2_total)/len(loss2_total)))
+        sys.stdout.write("\n")
+        loss1_total = []
+        acc_total = []
+        for i in range(val_epoch_size):
+            batch = next(objects['val_gen'])
+            loss1 = encoder.train_on_batch(batch[0], batch[1])
+            loss1_total.append(loss1[0])
+            acc_total.append(loss1[1])
+            sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.2f}, acc = {:.2f}"
+                             .format(i+1, val_epoch_size,
+                                     np.sum(loss1_total)/len(loss1_total),
+                                     np.sum(acc_total)/len(acc_total)))
 
 
 
