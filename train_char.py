@@ -12,7 +12,7 @@ from keras.optimizers import Adam
 from keras.callbacks import LearningRateScheduler
 
 
-from HRNN_encoder import HRNN_encoder
+from Encoder import HRNN_encoder
 import utils
 
 
