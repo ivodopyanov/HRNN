@@ -43,9 +43,9 @@ class Encoder(Layer):
         self.W_emb = self.init((self.input_dim, self.hidden_dim), name='{}_W_emb'.format(self.name))
         self.b_emb = K.zeros((self.hidden_dim), name='{}_b_emb'.format(self.name))
 
-        self.W = self.init((self.hidden_dim, self.hidden_dim), name='{}_W'.format(self.name))
-        self.U = self.inner_init((self.hidden_dim, self.hidden_dim), name='{}_U'.format(self.name))
-        self.b = K.zeros((self.hidden_dim), name='{}_b'.format(self.name))
+        self.W = self.init((self.hidden_dim, 3*self.hidden_dim), name='{}_W'.format(self.name))
+        self.U = self.inner_init((self.hidden_dim, 3*self.hidden_dim), name='{}_U'.format(self.name))
+        self.b = K.zeros((3*self.hidden_dim), name='{}_b'.format(self.name))
 
 
         self.W_action_1 = self.init((self.hidden_dim, self.action_dim), name='{}_W_action_1'.format(self.name))
@@ -165,7 +165,9 @@ class Encoder(Layer):
         action = TS.cast(action, "int8")
 
         # Actual new hidden state if node got info from left and from below
-        h_ = K.tanh(K.dot(x, self.W) + K.dot(h_tm1, self.U) + self.b)
+        z = K.hard_sigmoid(K.dot(x, self.W[:,:self.hidden_dim]) + K.dot(h_tm1, self.U[:,:self.hidden_dim]) + self.b[:self.hidden_dim])
+        r = K.hard_sigmoid(K.dot(x, self.W[:,self.hidden_dim:2*self.hidden_dim]) + K.dot(h_tm1, self.U[:,self.hidden_dim:2*self.hidden_dim]) + self.b[self.hidden_dim:2*self.hidden_dim])
+        h_ = z*h_tm1 + (1-z)*K.tanh(K.dot(x, self.W[:,2*self.hidden_dim:]) + K.dot(r*h_tm1, self.U[:,2*self.hidden_dim:]) + self.b[2*self.hidden_dim:])
 
         zeros = K.zeros((self.batch_size, self.hidden_dim))
         both = (1-action_prev)*data_mask_prev*action*data_mask_tm1
