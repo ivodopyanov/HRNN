@@ -55,8 +55,8 @@ class Encoder(Layer):
         self.W_action_2 = self.init((self.action_dim,2), name='{}_W_action_2'.format(self.name))
         self.b_action_2 = K.zeros((2,), name='{}_b_action_2'.format(self.name))
 
-        self.gammas = K.ones((2, self.hidden_dim), name="gammas")
-        self.betas = K.zeros((2, self.hidden_dim), name="betas")
+        self.gammas = K.ones((2, 3*self.hidden_dim), name="gammas")
+        self.betas = K.zeros((2, 3*self.hidden_dim), name="betas")
         self.trainable_weights = [self.W_emb, self.b_emb, self.W ,self.U , self.b]
         self.built = True
 
@@ -90,31 +90,35 @@ class Encoder(Layer):
         first_mask = K.expand_dims(first_mask, 0)
         eos_mask = K.concatenate([data_mask[1:], first_mask], axis=0)
         eos_mask = TS.cast(data_mask*(1-eos_mask), "int8")
-        last_layer_mask3 = K.concatenate([K.zeros((self.depth-1,self.batch_size), dtype="int8"), K.ones((1, self.batch_size), dtype="int8")], axis=0)
 
         results, _ = T.scan(self.vertical_step,
-                            sequences=[last_layer_mask3],
                             outputs_info=[x, initial_action, data_mask],
-                            non_sequences=[bucket_size, eos_mask],
-                            n_steps=self.depth)
+                            non_sequences=[bucket_size, eos_mask, K.zeros((self.batch_size), dtype="int8")],
+                            n_steps=self.depth-1)
+
+        results, _ = T.scan(self.vertical_step,
+                            outputs_info=[results[0][-1], results[1][-1], results[2][-1]],
+                            non_sequences=[bucket_size, eos_mask, K.ones((self.batch_size), dtype="int8")],
+                            n_steps=1)
+
         outputs = results[0]
         outputs = outputs[-1,-1,:,:]
         return outputs
 
     # Vertical pass along hierarchy dimension
     def vertical_step(self, *args):
-        last_layer_mask3 = args[0]
-        x = args[1]
-        action_prev = args[2]
-        data_mask = args[3]
-        bucket_size=args[4]
-        eos_mask = args[5]
+        x = args[0]
+        action_prev = args[1]
+        data_mask = args[2]
+        bucket_size=args[3]
+        eos_mask = args[4]
+        last_layer_mask3 = args[5]
 
-        #data_mask = Print("data_mask")(data_mask)
 
         initial_h = K.zeros((self.batch_size, self.hidden_dim))
         initial_action = K.zeros((self.batch_size), dtype="int8")
         initial_data_mask = K.zeros((self.batch_size), dtype="int8")
+        initial_both_output = K.zeros((self.batch_size), dtype="int8")
 
         shifted_data_mask = K.concatenate([K.ones((1, self.batch_size)), data_mask[:-1]], axis=0)
         shifted_eos_mask = K.concatenate([K.zeros((1, self.batch_size)), eos_mask[:-1]], axis=0)
@@ -122,12 +126,13 @@ class Encoder(Layer):
 
         results, _ = T.scan(self.horizontal_step,
                             sequences=[x, action_prev, shifted_data_mask, data_mask, shifted_eos_mask, eos_mask],
-                            outputs_info=[initial_h, initial_action, initial_data_mask],
+                            outputs_info=[initial_h, initial_action, initial_data_mask, initial_both_output],
                             non_sequences=[last_layer_mask3],
                             n_steps=bucket_size)
         h = results[0]
         action = results[1]
         new_data_mask = results[2]
+        both_output = results[3]
 
         #Shift computed action for 1 step left because at the step i we compute action for i-1
         last_action = K.zeros_like(action[0])
@@ -138,9 +143,7 @@ class Encoder(Layer):
 
         #shifted_action = Print("shifted_action")(shifted_action)
         #has_value = Print("has_value")(has_value)
-
-
-        return h, shifted_action, new_data_mask
+        return [h, shifted_action, new_data_mask], T.scan_module.until(TS.eq(TS.sum(both_output), 0))
 
     # Horizontal pass along time dimension
     def horizontal_step(self, *args):
@@ -153,7 +156,8 @@ class Encoder(Layer):
         h_tm1 = args[6]
         action_tm1 = args[7]
         data_mask_tm1 = args[8]
-        last_layer_mask3 = args[9]
+        both_output_tm1 = args[9]
+        last_layer_mask3 = args[10]
 
         policy = activations.relu(K.dot(x, self.W_action_1) + K.dot(h_tm1, self.U_action_1) + self.b_action_1)
         policy = TS.exp(K.dot(policy, self.W_action_2)+self.b_action_2)
@@ -165,14 +169,19 @@ class Encoder(Layer):
         action = TS.cast(action, "int8")
 
         # Actual new hidden state if node got info from left and from below
-        z = K.hard_sigmoid(K.dot(x, self.W[:,:self.hidden_dim]) + K.dot(h_tm1, self.U[:,:self.hidden_dim]) + self.b[:self.hidden_dim])
-        r = K.hard_sigmoid(K.dot(x, self.W[:,self.hidden_dim:2*self.hidden_dim]) + K.dot(h_tm1, self.U[:,self.hidden_dim:2*self.hidden_dim]) + self.b[self.hidden_dim:2*self.hidden_dim])
-        h_ = z*h_tm1 + (1-z)*K.tanh(K.dot(x, self.W[:,2*self.hidden_dim:]) + K.dot(r*h_tm1, self.U[:,2*self.hidden_dim:]) + self.b[2*self.hidden_dim:])
+        s1 = K.dot(x, self.W) + self.b
+        s2 = K.dot(h_tm1, self.U[:,:2*self.hidden_dim])
+        s = K.hard_sigmoid(s1[:,:2*self.hidden_dim] + s2)
+        z = s[:,:self.hidden_dim]
+        r = s[:,self.hidden_dim:2*self.hidden_dim]
+        h_ = z*h_tm1 + (1-z)*K.tanh(s1[:,2*self.hidden_dim:] + K.dot(r*h_tm1, self.U[:,2*self.hidden_dim:]))
+
 
         zeros = K.zeros((self.batch_size, self.hidden_dim))
         both = (1-action_prev)*data_mask_prev*action*data_mask_tm1
         h_tm1_only = data_mask_tm1*action*(action_prev + (1-action_prev)*(1-data_mask_prev))
         x_only = data_mask_prev*(1-action_prev)*((1-action) + action*(1-data_mask_tm1))
+        both_output = TS.cast(both, "int8")
 
         data_mask = both + x_only + h_tm1_only
         data_mask = TS.cast(data_mask, "int8")
@@ -196,7 +205,7 @@ class Encoder(Layer):
         data_mask_prev = TS.extra_ops.repeat(data_mask_prev, self.hidden_dim, axis=1)
         h = K.switch(data_mask_prev, h, h_tm1)
 
-        result = [h, action, data_mask]
+        result = [h, action, data_mask, both_output]
         return result
 
 

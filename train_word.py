@@ -66,7 +66,7 @@ def init_settings():
     settings = {}
     settings['word_embedding_size'] = 64
     settings['sentence_embedding_size'] = 64
-    settings['depth'] = 8
+    settings['depth'] = 20
     settings['action_dim'] = 128
     settings['dropout_W'] = 0.2
     settings['dropout_U'] = 0.2
@@ -326,26 +326,32 @@ def restore_exp(settings, x, total_error, h, policy, fk_calculated):
     return [x_value_input, h_value_input], policy_output
 
 
+def save(objects, filename):
+    objects['encoder'].save_weights("encoder_{}.h5".format(filename))
+    objects['predictor'].save_weights("predictor_{}.h5".format(filename))
+    objects['rl_model'].save_weights("rl_model_{}.h5".format(filename))
+
+def load(objects, filename):
+    objects['encoder'].load_weights("encoder_{}.h5".format(filename))
+    objects['predictor'].load_weights("predictor_{}.h5".format(filename))
+    objects['rl_model'].load_weights("rl_model_{}.h5".format(filename))
 
 
 
-
-
-
-def train(weights_filename):
+def train(filename):
     settings = init_settings()
     settings['with_sentences']=True
     data, settings = get_data(settings)
     objects = prepare_objects(data, settings)
-    #objects['model'].load_weights("rl.h5")
+    #load(objects, filename)
     sys.stdout.write('Compiling model\n')
     #run_training(data, objects)
     run_training_RL(data, objects, settings)
-    objects['model'].save_weights(weights_filename)
+    #save(objects, filename)
 
 
 if __name__=="__main__":
-    train("weights.h5")
+    train("model")
 
 
 
