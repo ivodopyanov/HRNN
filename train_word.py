@@ -67,7 +67,7 @@ def init_settings():
     settings['word_embedding_size'] = 64
     settings['sentence_embedding_size'] = 64
     settings['depth'] = 20
-    settings['action_dim'] = 128
+    settings['action_dim'] = 256
     settings['dropout_W'] = 0.2
     settings['dropout_U'] = 0.2
     settings['hidden_dims'] = [64]
@@ -151,7 +151,7 @@ def build_predictor(data, settings):
         layer = Activation('tanh')(layer)
         layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(input=[data_input, bucket_size_input], output=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5]])
+    model = Model(input=[data_input, bucket_size_input], output=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6]])
     optimizer = Adam(lr=0.001, clipnorm=5)
     #model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=['accuracy'])
     return model
@@ -234,6 +234,7 @@ def run_training_RL(data, objects, settings):
         loss1_total = []
         acc_total = []
         loss2_total = []
+        depth_total = []
         for i in range(epoch_size):
             batch = next(objects['data_gen'])
             loss1 = encoder.train_on_batch(batch[0], batch[1])
@@ -257,6 +258,7 @@ def run_training_RL(data, objects, settings):
             x = y_pred[3]
             h = y_pred[4]
             policy = y_pred[5]
+            depth = y_pred[6]
 
             error = -np.log(np.sum(output*batch[1], axis=1))
             X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
@@ -278,22 +280,24 @@ def run_training_RL(data, objects, settings):
             loss1_total.append(loss1[0])
             loss2_total.append(loss2)
             acc_total.append(loss1[1])
+            depth_total.append(depth[0])
 
-            sys.stdout.write("\r batch {} / {}: loss1 = {:.2f}, acc = {:.2f}, loss2 = {:.6f}"
+            sys.stdout.write("\r batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.6f}, avg depth = {:.2f}"
                              .format(i,
                                      epoch_size,
                                      np.sum(loss1_total)/len(loss1_total),
                                      np.sum(acc_total)/len(acc_total),
-                                     np.sum(loss2_total)/len(loss2_total)))
+                                     np.sum(loss2_total)/len(loss2_total),
+                                     np.sum(depth_total)/len(depth_total)))
         sys.stdout.write("\n")
         loss1_total = []
         acc_total = []
         for i in range(val_epoch_size):
             batch = next(objects['val_gen'])
-            loss1 = encoder.train_on_batch(batch[0], batch[1])
+            loss1 = encoder.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
             loss1_total.append(loss1[0])
             acc_total.append(loss1[1])
-            sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.2f}, acc = {:.2f}"
+            sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}"
                              .format(i+1, val_epoch_size,
                                      np.sum(loss1_total)/len(loss1_total),
                                      np.sum(acc_total)/len(acc_total)))
@@ -305,7 +309,7 @@ def restore_exp(settings, x, total_error, h, policy, fk_calculated):
     error_mult = np.repeat(np.expand_dims(total_error, axis=1), fk_calculated.shape[1], axis=1)
     error_mult = np.repeat(np.expand_dims(error_mult, axis=2), fk_calculated.shape[2], axis=2)
 
-    chosen_action = np.greater_equal(policy[:,:,:,0], policy[:,:,:,1])
+    chosen_action = np.less_equal(policy[:,:,:,0], policy[:,:,:,1])
     shift_action_mask = np.ones_like(error_mult)*chosen_action
     reduce_action_mask = np.ones_like(error_mult)*(1-chosen_action)
 

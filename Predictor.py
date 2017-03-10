@@ -60,7 +60,7 @@ class Predictor(Layer):
         self.built = True
 
     def compute_mask(self, input, input_mask=None):
-        return [None, None, None, None, None, None]
+        return [None, None, None, None, None, None, None]
 
     def get_output_shape_for(self, input_shape):
         return [(input_shape[0][0], self.hidden_dim),
@@ -68,7 +68,8 @@ class Predictor(Layer):
                 (self.batch_size, self.depth, 1, 1),
                 (self.batch_size, self.depth, 1,self.hidden_dim),
                 (self.batch_size, self.depth, 1,self.hidden_dim),
-                (self.batch_size, self.depth, 1,2)]
+                (self.batch_size, self.depth, 1,2),
+                (1,1)]
 
 
     def call(self, input, mask=None):
@@ -98,15 +99,16 @@ class Predictor(Layer):
         initial_policy = TS.extra_ops.repeat(initial_policy, 2, axis=2)
         initial_policy_input_x = K.zeros_like(x)
         initial_policy_input_h = K.zeros_like(x)
+        initial_depth = K.zeros((1,), dtype="int8")
 
 
         results, _ = T.scan(self.vertical_step,
-                            outputs_info=[x, initial_action, data_mask, initial_action_calculated, initial_policy_input_x, initial_policy_input_h, initial_policy],
+                            outputs_info=[x, initial_action, data_mask, initial_action_calculated, initial_policy_input_x, initial_policy_input_h, initial_policy, initial_depth],
                             non_sequences=[bucket_size, eos_mask, K.zeros((self.batch_size), dtype="int8")],
                             n_steps=self.depth-1)
 
         last_layer_results, _ = T.scan(self.vertical_step,
-                            outputs_info=[results[0][-1], results[1][-1], results[2][-1], results[3][-1], results[4][-1], results[5][-1], results[6][-1]],
+                            outputs_info=[results[0][-1], results[1][-1], results[2][-1], results[3][-1], results[4][-1], results[5][-1], results[6][-1], results[7][-1]],
                             non_sequences=[bucket_size, eos_mask, K.zeros((self.batch_size), dtype="int8")],
                             n_steps=1)
 
@@ -116,8 +118,9 @@ class Predictor(Layer):
         policy_input_x = K.concatenate([results[4], last_layer_results[4]], axis=0).dimshuffle([2,0,1,3])
         policy_input_h = K.concatenate([results[5], last_layer_results[5]], axis=0).dimshuffle([2,0,1,3])
         policy = K.concatenate([results[6], last_layer_results[6]], axis=0).dimshuffle([2,0,1,3])
+        depth = results[7][-1]
 
-        return [output, action, action_calculated, policy_input_x, policy_input_h, policy]
+        return [output, action, action_calculated, policy_input_x, policy_input_h, policy, depth]
 
     # Vertical pass along hierarchy dimension
     def vertical_step(self, *args):
@@ -128,9 +131,10 @@ class Predictor(Layer):
         policy_input_x_prev = args[4]
         policy_input_h_prev = args[5]
         policy_prev = args[6]
-        bucket_size=args[7]
-        eos_mask = args[8]
-        last_layer_mask3 = args[9]
+        depth_prev = args[7]
+        bucket_size=args[8]
+        eos_mask = args[9]
+        last_layer_mask3 = args[10]
 
         initial_h = K.zeros((self.batch_size, self.hidden_dim))
         initial_action = K.zeros((self.batch_size), dtype="int8")
@@ -167,7 +171,9 @@ class Predictor(Layer):
         policy_input_x = x
         policy_input_h = K.concatenate([K.zeros((1, self.batch_size, self.hidden_dim)), h[1:]], axis=0)
 
-        return [h, shifted_action, new_data_mask, action_calculated, policy_input_x, policy_input_h, policy], T.scan_module.until(TS.eq(TS.sum(both_output), 0))
+        new_depth = TS.cast(depth_prev+1, dtype="int8")
+
+        return [h, shifted_action, new_data_mask, action_calculated, policy_input_x, policy_input_h, policy, new_depth], T.scan_module.until(TS.eq(TS.sum(both_output), 0))
 
     # Horizontal pass along time dimension
     def horizontal_step(self, *args):
@@ -189,7 +195,7 @@ class Predictor(Layer):
         policy = activations.relu(K.dot(x, self.W_action_1) + K.dot(h_tm1, self.U_action_1) + self.b_action_1)
         policy = TS.exp(K.dot(policy, self.W_action_2)+self.b_action_2)
 
-        action = K.switch(TS.ge(policy[:,0], policy[:, 1]), 1, 0)
+        action = K.switch(TS.le(policy[:,0], policy[:, 1]), 1, 0)
         action = K.switch(action_prev, 1, action)
         action = K.switch(last_layer_mask3, 1, action)
         action = K.switch(eos_mask_tm1, 0, action)
