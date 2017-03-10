@@ -248,7 +248,6 @@ def run_training_RL(data, objects, settings):
             loss1 = encoder.train_on_batch(batch[0], batch[1])
 
             if i % settings['rl_train_speed_ratio'] == 0:
-
                 predictor.get_layer('emb').W.set_value(K.get_value(encoder.get_layer('emb').W))
                 predictor.get_layer('encoder').W_emb.set_value(K.get_value(encoder.get_layer('encoder').W_emb))
                 predictor.get_layer('encoder').b_emb.set_value(K.get_value(encoder.get_layer('encoder').b_emb))
@@ -260,21 +259,21 @@ def run_training_RL(data, objects, settings):
                 predictor.get_layer('output').W.set_value(K.get_value(encoder.get_layer('output').W))
                 predictor.get_layer('output').b.set_value(K.get_value(encoder.get_layer('output').b))
 
-                y_pred = predictor.predict_on_batch(batch[0])
+            y_pred = predictor.predict_on_batch(batch[0])
 
-                output = y_pred[0]
-                action = y_pred[1]
-                action_calculated = y_pred[2]
-                x = y_pred[3]
-                h = y_pred[4]
-                policy = y_pred[5]
-                depth = y_pred[6]
+            output = y_pred[0]
+            action = y_pred[1]
+            action_calculated = y_pred[2]
+            x = y_pred[3]
+            h = y_pred[4]
+            policy = y_pred[5]
+            depth = y_pred[6]
 
-                error = -np.log(np.sum(output*batch[1], axis=1))
-                X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
-                loss2 = rl_model.train_on_batch(X,Y)
+            error = -np.log(np.sum(output*batch[1], axis=1))
+            X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
+            loss2 = rl_model.train_on_batch(X,Y)
 
-
+            if i % settings['rl_train_speed_ratio'] == 0:
                 encoder.get_layer('encoder').W_action_1.set_value(K.get_value(rl_model.get_layer('encoder').W_action_1))
                 encoder.get_layer('encoder').U_action_1.set_value(K.get_value(rl_model.get_layer('encoder').U_action_1))
                 encoder.get_layer('encoder').b_action_1.set_value(K.get_value(rl_model.get_layer('encoder').b_action_1))
@@ -287,8 +286,8 @@ def run_training_RL(data, objects, settings):
                 predictor.get_layer('encoder').W_action_2.set_value(K.get_value(rl_model.get_layer('encoder').W_action_2))
                 predictor.get_layer('encoder').b_action_2.set_value(K.get_value(rl_model.get_layer('encoder').b_action_2))
 
-                loss2_total.append(loss2)
-                depth_total.append(depth[0])
+            loss2_total.append(loss2)
+            depth_total.append(depth[0])
 
             loss1_total.append(loss1[0])
             acc_total.append(loss1[1])
