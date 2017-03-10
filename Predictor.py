@@ -5,10 +5,11 @@ from keras.engine import Layer
 import theano as T
 import theano.tensor as TS
 from theano.printing import Print
+from theano.tensor.shared_randomstreams import RandomStreams
 
 
 class Predictor(Layer):
-    def __init__(self, input_dim, hidden_dim, action_dim, depth, batch_size, max_len,
+    def __init__(self, input_dim, hidden_dim, action_dim, depth, batch_size, max_len, random_action_prob,
                  init='glorot_uniform', inner_init='orthogonal', **kwargs):
         '''
         Layer also uses
@@ -27,6 +28,7 @@ class Predictor(Layer):
         self.action_dim = action_dim
         self.batch_size = batch_size
         self.max_len = max_len
+        self.random_action_prob = random_action_prob
         self.init = initializations.get(init)
         self.inner_init = initializations.get(inner_init)
         self.supports_masking = True
@@ -196,6 +198,12 @@ class Predictor(Layer):
         policy = TS.exp(K.dot(policy, self.W_action_2)+self.b_action_2)
 
         action = K.switch(TS.le(policy[:,0], policy[:, 1]), 1, 0)
+
+        srng = RandomStreams()
+        select_random_action = TS.le(srng.uniform((self.batch_size,)), self.random_action_prob)
+        random_action = TS.ge(srng.uniform((self.batch_size,)), 0.5)
+        action = (1-select_random_action)*action + select_random_action*random_action
+
         action = K.switch(action_prev, 1, action)
         action = K.switch(last_layer_mask3, 1, action)
         action = K.switch(eos_mask_tm1, 0, action)

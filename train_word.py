@@ -64,8 +64,8 @@ def get_data(settings):
 
 def init_settings():
     settings = {}
-    settings['word_embedding_size'] = 64
-    settings['sentence_embedding_size'] = 64
+    settings['word_embedding_size'] = 128
+    settings['sentence_embedding_size'] = 128
     settings['depth'] = 20
     settings['action_dim'] = 256
     settings['dropout_W'] = 0.2
@@ -77,7 +77,8 @@ def init_settings():
     settings['max_len'] = 128
     settings['max_features']=10000
     settings['with_sentences']=False
-    settings['epochs'] = 50
+    settings['epochs'] = 100
+    settings['random_action_prob'] = 0.2
     return settings
 
 def prepare_objects(data, settings):
@@ -143,6 +144,7 @@ def build_predictor(data, settings):
                                      action_dim=settings['action_dim'],
                                      batch_size=settings['batch_size'],
                                      max_len=settings['max_len'],
+                                     random_action_prob=settings['random_action_prob'],
                                      name='encoder')([embedding, bucket_size_input])
     layer = encoder[0]
 
