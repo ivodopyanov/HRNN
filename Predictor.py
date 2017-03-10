@@ -120,7 +120,7 @@ class Predictor(Layer):
         policy_input_x = K.concatenate([results[4], last_layer_results[4]], axis=0).dimshuffle([2,0,1,3])
         policy_input_h = K.concatenate([results[5], last_layer_results[5]], axis=0).dimshuffle([2,0,1,3])
         policy = K.concatenate([results[6], last_layer_results[6]], axis=0).dimshuffle([2,0,1,3])
-        depth = results[7][-1]
+        depth = last_layer_results[7][-1]
 
         return [output, action, action_calculated, policy_input_x, policy_input_h, policy, depth]
 
