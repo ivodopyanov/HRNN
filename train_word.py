@@ -70,6 +70,7 @@ def init_settings():
     settings['action_dim'] = 256
     settings['dropout_W'] = 0.2
     settings['dropout_U'] = 0.2
+    settings['dropout_action'] = 0.3
     settings['hidden_dims'] = [64]
     settings['dense_dropout'] = 0.5
     settings['bucket_size_step'] = 4
@@ -79,7 +80,7 @@ def init_settings():
     settings['with_sentences']=False
     settings['epochs'] = 100
     settings['random_action_prob'] = 0.0
-    settings['rl_train_speed_ratio'] = 5
+    settings['rl_train_speed_ratio'] = 3
     return settings
 
 def prepare_objects(data, settings):
@@ -118,6 +119,9 @@ def build_encoder(data, settings):
                                    action_dim=settings['action_dim'],
                                    batch_size = settings['batch_size'],
                                    max_len=settings['max_len'],
+                                   dropout_u=settings['dropout_U'],
+                                   dropout_w=settings['dropout_W'],
+                                   dropout_action=settings['dropout_action'],
                                    name='encoder')([embedding, bucket_size_input])
     layer = encoder
 

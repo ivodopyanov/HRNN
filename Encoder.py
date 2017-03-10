@@ -10,6 +10,7 @@ from theano.printing import Print
 
 class Encoder(Layer):
     def __init__(self, input_dim, hidden_dim, action_dim, depth, batch_size, max_len,
+                 dropout_w, dropout_u, dropout_action,
                  init='glorot_uniform', inner_init='orthogonal', **kwargs):
         '''
         Layer also uses
@@ -28,12 +29,18 @@ class Encoder(Layer):
         self.depth = depth
         self.batch_size = batch_size
         self.max_len = max_len
+        self.dropout_w = dropout_w
+        self.dropout_u = dropout_u
+        self.dropout_action = dropout_action
         self.init = initializations.get(init)
         self.inner_init = initializations.get(inner_init)
         self.supports_masking = True
         self.gamma_init = initializations.get('one')
         self.beta_init = initializations.get('zero')
         self.epsilon = 1e-5
+
+        if self.dropout_w or self.dropout_u or self.dropout_action:
+            self.uses_learning_phase = True
 
         super(Encoder, self).__init__(**kwargs)
 
@@ -159,7 +166,24 @@ class Encoder(Layer):
         both_output_tm1 = args[9]
         last_layer_mask3 = args[10]
 
-        policy = activations.relu(K.dot(x, self.W_action_1) + K.dot(h_tm1, self.U_action_1) + self.b_action_1)
+
+        if 0 < self.dropout_u < 1:
+            ones = K.ones((self.hidden_dim))
+            B_U = K.in_train_phase(K.dropout(ones, self.dropout_u), ones)
+        else:
+            B_U = K.cast_to_floatx(1.)
+        if 0 < self.dropout_w < 1:
+            ones = K.ones((self.hidden_dim))
+            B_W = K.in_train_phase(K.dropout(ones, self.dropout_w), ones)
+        else:
+            B_W = K.cast_to_floatx(1.)
+        if 0 < self.dropout_action < 1:
+            ones = K.ones((self.action_dim))
+            B_action = K.in_train_phase(K.dropout(ones, self.dropout_action), ones)
+        else:
+            B_action = K.cast_to_floatx(1.)
+
+        policy = activations.relu(K.dot(x*B_W, self.W_action_1) + K.dot(h_tm1*B_U, self.U_action_1) + self.b_action_1)*B_action
         policy = TS.exp(K.dot(policy, self.W_action_2)+self.b_action_2)
 
         action = K.switch(TS.le(policy[:,0], policy[:, 1]), 1, 0)
@@ -169,12 +193,12 @@ class Encoder(Layer):
         action = TS.cast(action, "int8")
 
         # Actual new hidden state if node got info from left and from below
-        s1 = K.dot(x, self.W) + self.b
-        s2 = K.dot(h_tm1, self.U[:,:2*self.hidden_dim])
+        s1 = K.dot(x*B_W, self.W) + self.b
+        s2 = K.dot(h_tm1*B_U, self.U[:,:2*self.hidden_dim])
         s = K.hard_sigmoid(s1[:,:2*self.hidden_dim] + s2)
         z = s[:,:self.hidden_dim]
         r = s[:,self.hidden_dim:2*self.hidden_dim]
-        h_ = z*h_tm1 + (1-z)*K.tanh(s1[:,2*self.hidden_dim:] + K.dot(r*h_tm1, self.U[:,2*self.hidden_dim:]))
+        h_ = z*h_tm1 + (1-z)*K.tanh(s1[:,2*self.hidden_dim:] + K.dot(r*h_tm1*B_U, self.U[:,2*self.hidden_dim:]))
 
 
         zeros = K.zeros((self.batch_size, self.hidden_dim))
