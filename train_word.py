@@ -258,7 +258,7 @@ def run_training_RL(data, objects, settings):
             h = y_pred[4]
             policy = y_pred[5]
 
-            error = np.log(np.sum(output*batch[1], axis=1))
+            error = -np.log(np.sum(output*batch[1], axis=1))
             X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
             loss2 = rl_model.train_on_batch(X,Y)
 
