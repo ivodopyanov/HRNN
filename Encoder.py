@@ -160,7 +160,7 @@ class Encoder(Layer):
         last_layer_mask3 = args[10]
 
         policy = activations.relu(K.dot(x, self.W_action_1) + K.dot(h_tm1, self.U_action_1) + self.b_action_1)
-        policy = TS.exp(K.dot(policy, self.W_action_2)+self.b_action_2)
+        policy = -TS.exp(K.dot(policy, self.W_action_2)+self.b_action_2)
 
         action = K.switch(TS.ge(policy[:,0], policy[:, 1]), 1, 0)
         action = K.switch(action_prev, 1, action)
