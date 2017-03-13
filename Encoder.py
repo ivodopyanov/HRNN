@@ -192,7 +192,7 @@ class Encoder(Layer):
             B_action = K.cast_to_floatx(1.)
 
         policy = activations.relu(K.dot(x*B_W, self.W_action_1) + K.dot(h_tm1*B_U, self.U_action_1) + self.b_action_1)*B_action
-        policy = TS.exp(K.dot(policy, self.W_action_2)+self.b_action_2)
+        policy = K.sigmoid(K.dot(policy, self.W_action_2)+self.b_action_2)
 
         action = K.switch(TS.le(policy[:,0], policy[:, 1]), 1, 0)
         action = K.switch(action_prev, 1, action)
