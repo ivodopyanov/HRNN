@@ -105,7 +105,7 @@ def prepare_objects(data, settings):
             'train_indexes': train_indexes,
             'val_indexes': val_indexes}
 
-def build_encoder(data, settings, mode):
+def build_encoder(data, settings):
     depth = 1
     if settings['mode'] == 1:
         depth = settings['depth']
@@ -292,7 +292,7 @@ def run_training_RL(data, objects, settings):
                 else:
                     avg_depth = np.sum(depth_total)/len(depth_total)
 
-            if settings['depth'] == 1:
+            if settings['mode'] == 0:
                 sys.stdout.write("\r batch {} / {}: loss1 = {:.4f}, acc = {:.4f}"
                          .format(j+1, epoch_size, avg_loss1, avg_acc))
             else:
@@ -370,7 +370,7 @@ def run_training_RL(data, objects, settings):
         depth_total = []
         for i in range(val_epoch_size):
             batch = next(objects['val_gen'])
-            if settings['depth'] == 1:
+            if settings['mode'] == 0:
                 loss1 = encoder.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
 
                 loss1_total.append(loss1[0])
