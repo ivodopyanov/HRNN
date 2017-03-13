@@ -80,6 +80,7 @@ def init_settings():
     settings['with_sentences']=False
     settings['epochs'] = 100
     settings['random_action_prob'] = 0.0
+    settings['mode'] = 0
     return settings
 
 def prepare_objects(data, settings):
@@ -91,7 +92,7 @@ def prepare_objects(data, settings):
     train_indexes = indexes[:train_segment]
     val_indexes = indexes[train_segment:]
 
-    encoder = build_encoder(data, settings, 0)
+    encoder = build_encoder(data, settings)
     predictor = build_predictor(data, settings)
     rl_model = build_RL_model(settings)
     data_gen = build_generator_HRNN(data, settings, train_indexes)
@@ -105,9 +106,9 @@ def prepare_objects(data, settings):
             'val_indexes': val_indexes}
 
 def build_encoder(data, settings, mode):
-    depth = settings['depth']
-    if mode == 0:
-        depth = 1
+    depth = 1
+    if settings['mode'] == 1:
+        depth = settings['depth']
     sys.stdout.write('Building model\n')
     data_input = Input(shape=(settings['max_len'],))
     bucket_size_input = Input(shape=(1,),dtype="int32")
@@ -176,7 +177,7 @@ def build_RL_model(settings):
 
 
 def rebuild_encoder(data, objects, settings):
-    encoder = build_encoder(data, settings, 1)
+    encoder = build_encoder(data, settings)
 
     encoder.get_layer('emb').W.set_value(K.get_value(objects['encoder'].get_layer('emb').W))
     encoder.get_layer('encoder').W_emb.set_value(K.get_value(objects['encoder'].get_layer('encoder').W_emb))
@@ -299,7 +300,7 @@ def run_training_RL(data, objects, settings):
                          .format(j+1, epoch_size,
                                  avg_loss1, avg_acc, avg_loss2, avg_depth))
 
-        if settings['depth'] > 1:
+        if settings['mode'] == 1:
             predictor.get_layer('emb').W.set_value(K.get_value(encoder.get_layer('emb').W))
             predictor.get_layer('encoder').W_emb.set_value(K.get_value(encoder.get_layer('encoder').W_emb))
             predictor.get_layer('encoder').b_emb.set_value(K.get_value(encoder.get_layer('encoder').b_emb))
@@ -453,7 +454,7 @@ def train(filename):
     sys.stdout.write('Compiling model\n')
     #run_training(data, objects)
     run_training_RL(data, objects, settings)
-    settings['depth']=20
+    settings['mode']=1
     objects = rebuild_encoder(data, objects, settings)
     run_training_RL(data, objects, settings)
     #save(objects, filename)
