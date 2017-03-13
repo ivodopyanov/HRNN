@@ -81,7 +81,6 @@ class Encoder(Layer):
 
         # Keras doesn't allow 1D model inputs - so that tensor have shape (1,1) instead of scalar or (1,)
         bucket_size = input[1][0][0]
-        mode = input[2][0][0]
 
         data_mask = mask[0]
         if data_mask.ndim == x.ndim-1:
@@ -107,10 +106,6 @@ class Encoder(Layer):
                             outputs_info=[x, initial_action, data_mask],
                             non_sequences=[bucket_size, eos_mask, K.zeros((self.batch_size), dtype="int8")],
                             n_steps=self.depth-1)
-
-        x = ifelse(TS.eq(mode, 0), x, results[0][-1])
-        initial_action = ifelse(TS.eq(mode, 0), initial_action, results[1][-1])
-        data_mask = ifelse(TS.eq(mode, 0), data_mask, results[2][-1])
 
         results, _ = T.scan(self.vertical_step,
                             outputs_info=[x, initial_action, data_mask],
