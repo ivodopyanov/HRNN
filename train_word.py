@@ -251,10 +251,26 @@ def run_training_RL(data, objects, settings):
                 loss1_total.append(loss1[0])
                 acc_total.append(loss1[1])
 
-                sys.stdout.write("\r batch {} / {} {} / {}: loss1 = {:.4f}, acc = {:.4f}"
+                if len(loss1_total) == 0:
+                    avg_loss1 = 0
+                else:
+                    avg_loss1 = np.sum(loss1_total)/len(loss1_total)
+                if len(acc_total) == 0:
+                    avg_acc = 0
+                else:
+                    avg_acc = np.sum(acc_total)/len(acc_total)
+                if len(loss2_total) == 0:
+                    avg_loss2 = 0
+                else:
+                    avg_loss2 = np.sum(loss2_total)/len(loss2_total)
+                if len(depth_total) == 0:
+                    avg_depth = 0
+                else:
+                    avg_depth = np.sum(depth_total)/len(depth_total)
+
+                sys.stdout.write("\r batch {} / {} {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
                              .format(j+1, settings['steps'], i+1, block_count,
-                                     np.sum(loss1_total)/len(loss1_total),
-                                     np.sum(acc_total)/len(acc_total)))
+                                     avg_loss1, avg_acc, avg_loss2, avg_depth))
 
             predictor.get_layer('emb').W.set_value(K.get_value(encoder.get_layer('emb').W))
             predictor.get_layer('encoder').W_emb.set_value(K.get_value(encoder.get_layer('encoder').W_emb))
@@ -266,7 +282,6 @@ def run_training_RL(data, objects, settings):
             predictor.get_layer('dense_0').b.set_value(K.get_value(encoder.get_layer('dense_0').b))
             predictor.get_layer('output').W.set_value(K.get_value(encoder.get_layer('output').W))
             predictor.get_layer('output').b.set_value(K.get_value(encoder.get_layer('output').b))
-            sys.stdout.write("\n")
             for j in range(settings['steps']):
 
                 y_pred = predictor.predict_on_batch(batch[0])
@@ -292,10 +307,26 @@ def run_training_RL(data, objects, settings):
                 predictor.get_layer('encoder').W_action_2.set_value(K.get_value(rl_model.get_layer('encoder').W_action_2))
                 predictor.get_layer('encoder').b_action_2.set_value(K.get_value(rl_model.get_layer('encoder').b_action_2))
 
-                sys.stdout.write("\r batch {} / {}  {} / {}: loss2 = {:.6f}, avg depth = {:.2f}"
-                             .format(j, settings['steps'], i, block_count,
-                                     np.sum(loss2_total)/len(loss2_total),
-                                     np.sum(depth_total)/len(depth_total)))
+                if len(loss1_total) == 0:
+                    avg_loss1 = 0
+                else:
+                    avg_loss1 = np.sum(loss1_total)/len(loss1_total)
+                if len(acc_total) == 0:
+                    avg_acc = 0
+                else:
+                    avg_acc = np.sum(acc_total)/len(acc_total)
+                if len(loss2_total) == 0:
+                    avg_loss2 = 0
+                else:
+                    avg_loss2 = np.sum(loss2_total)/len(loss2_total)
+                if len(depth_total) == 0:
+                    avg_depth = 0
+                else:
+                    avg_depth = np.sum(depth_total)/len(depth_total)
+
+                sys.stdout.write("\r batch {} / {} {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
+                             .format(j+1, settings['steps'], i+1, block_count,
+                                     avg_loss1, avg_acc, avg_loss2, avg_depth))
             sys.stdout.write("\n")
             encoder.get_layer('encoder').W_action_1.set_value(K.get_value(rl_model.get_layer('encoder').W_action_1))
             encoder.get_layer('encoder').U_action_1.set_value(K.get_value(rl_model.get_layer('encoder').U_action_1))
