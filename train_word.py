@@ -234,11 +234,11 @@ def run_training_RL(data, objects, settings):
     encoder = objects['encoder']
     predictor = objects['predictor']
     rl_model = objects['rl_model']
-    epoch_size = int(len(objects['train_indexes'])/(10*settings['batch_size']))
-    val_epoch_size = int(len(objects['val_indexes'])/(10*settings['batch_size']))
+    epoch_size = int(len(objects['train_indexes'])/(1*settings['batch_size']))
+    val_epoch_size = int(len(objects['val_indexes'])/(1*settings['batch_size']))
 
     for epoch in range(settings['epochs']):
-        sys.stdout.write("\nEpoch {}\n".format(epoch+1))
+        sys.stdout.write("\n\nEpoch {}\n".format(epoch+1))
         block_count = ceil(epoch_size/settings['steps'])
         for i in range(block_count):
             loss1_total = []
@@ -337,15 +337,34 @@ def run_training_RL(data, objects, settings):
         sys.stdout.write("\n")
         loss1_total = []
         acc_total = []
+        loss2_total = []
+        depth_total = []
         for i in range(val_epoch_size):
             batch = next(objects['val_gen'])
             loss1 = encoder.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
+            y_pred = predictor.predict_on_batch(batch[0])
+
+            output = y_pred[0]
+            action = y_pred[1]
+            action_calculated = y_pred[2]
+            x = y_pred[3]
+            h = y_pred[4]
+            policy = y_pred[5]
+            depth = y_pred[6]
+            error = -np.log(np.sum(output*batch[1], axis=1))
+            X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
+            loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
+
+            loss2_total.append(loss2)
+            depth_total.append(depth[0])
             loss1_total.append(loss1[0])
             acc_total.append(loss1[1])
-            sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}"
+            sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
                              .format(i+1, val_epoch_size,
                                      np.sum(loss1_total)/len(loss1_total),
-                                     np.sum(acc_total)/len(acc_total)))
+                                     np.sum(acc_total)/len(acc_total),
+                                     np.sum(loss2_total)/len(loss2_total),
+                                     np.sum(depth_total)/len(depth_total)))
 
 
 
