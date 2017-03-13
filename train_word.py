@@ -80,7 +80,6 @@ def init_settings():
     settings['with_sentences']=False
     settings['epochs'] = 100
     settings['random_action_prob'] = 0.0
-    settings['steps'] = 10
     return settings
 
 def prepare_objects(data, settings):
@@ -239,100 +238,98 @@ def run_training_RL(data, objects, settings):
 
     for epoch in range(settings['epochs']):
         sys.stdout.write("\n\nEpoch {}\n".format(epoch+1))
-        block_count = ceil(epoch_size/settings['steps'])
-        for i in range(block_count):
-            loss1_total = []
-            acc_total = []
-            loss2_total = []
-            depth_total = []
-            batch = next(objects['data_gen'])
-            for j in range(settings['steps']):
-                loss1 = encoder.train_on_batch(batch[0], batch[1])
-                loss1_total.append(loss1[0])
-                acc_total.append(loss1[1])
+        loss1_total = []
+        acc_total = []
+        loss2_total = []
+        depth_total = []
+        batch = next(objects['data_gen'])
+        for j in range(epoch_size):
+            loss1 = encoder.train_on_batch(batch[0], batch[1])
+            loss1_total.append(loss1[0])
+            acc_total.append(loss1[1])
 
-                if len(loss1_total) == 0:
-                    avg_loss1 = 0
-                else:
-                    avg_loss1 = np.sum(loss1_total)/len(loss1_total)
-                if len(acc_total) == 0:
-                    avg_acc = 0
-                else:
-                    avg_acc = np.sum(acc_total)/len(acc_total)
-                if len(loss2_total) == 0:
-                    avg_loss2 = 0
-                else:
-                    avg_loss2 = np.sum(loss2_total)/len(loss2_total)
-                if len(depth_total) == 0:
-                    avg_depth = 0
-                else:
-                    avg_depth = np.sum(depth_total)/len(depth_total)
+            if len(loss1_total) == 0:
+                avg_loss1 = 0
+            else:
+                avg_loss1 = np.sum(loss1_total)/len(loss1_total)
+            if len(acc_total) == 0:
+                avg_acc = 0
+            else:
+                avg_acc = np.sum(acc_total)/len(acc_total)
+            if len(loss2_total) == 0:
+                avg_loss2 = 0
+            else:
+                avg_loss2 = np.sum(loss2_total)/len(loss2_total)
+            if len(depth_total) == 0:
+                avg_depth = 0
+            else:
+                avg_depth = np.sum(depth_total)/len(depth_total)
 
-                sys.stdout.write("\r batch {} / {} {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
-                             .format(j+1, settings['steps'], i+1, block_count,
-                                     avg_loss1, avg_acc, avg_loss2, avg_depth))
+            sys.stdout.write("\r batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
+                         .format(j+1, epoch,
+                                 avg_loss1, avg_acc, avg_loss2, avg_depth))
 
-            predictor.get_layer('emb').W.set_value(K.get_value(encoder.get_layer('emb').W))
-            predictor.get_layer('encoder').W_emb.set_value(K.get_value(encoder.get_layer('encoder').W_emb))
-            predictor.get_layer('encoder').b_emb.set_value(K.get_value(encoder.get_layer('encoder').b_emb))
-            predictor.get_layer('encoder').W.set_value(K.get_value(encoder.get_layer('encoder').W))
-            predictor.get_layer('encoder').U.set_value(K.get_value(encoder.get_layer('encoder').U))
-            predictor.get_layer('encoder').b.set_value(K.get_value(encoder.get_layer('encoder').b))
-            predictor.get_layer('dense_0').W.set_value(K.get_value(encoder.get_layer('dense_0').W))
-            predictor.get_layer('dense_0').b.set_value(K.get_value(encoder.get_layer('dense_0').b))
-            predictor.get_layer('output').W.set_value(K.get_value(encoder.get_layer('output').W))
-            predictor.get_layer('output').b.set_value(K.get_value(encoder.get_layer('output').b))
-            for j in range(settings['steps']):
+        predictor.get_layer('emb').W.set_value(K.get_value(encoder.get_layer('emb').W))
+        predictor.get_layer('encoder').W_emb.set_value(K.get_value(encoder.get_layer('encoder').W_emb))
+        predictor.get_layer('encoder').b_emb.set_value(K.get_value(encoder.get_layer('encoder').b_emb))
+        predictor.get_layer('encoder').W.set_value(K.get_value(encoder.get_layer('encoder').W))
+        predictor.get_layer('encoder').U.set_value(K.get_value(encoder.get_layer('encoder').U))
+        predictor.get_layer('encoder').b.set_value(K.get_value(encoder.get_layer('encoder').b))
+        predictor.get_layer('dense_0').W.set_value(K.get_value(encoder.get_layer('dense_0').W))
+        predictor.get_layer('dense_0').b.set_value(K.get_value(encoder.get_layer('dense_0').b))
+        predictor.get_layer('output').W.set_value(K.get_value(encoder.get_layer('output').W))
+        predictor.get_layer('output').b.set_value(K.get_value(encoder.get_layer('output').b))
+        for j in range(epoch):
 
-                y_pred = predictor.predict_on_batch(batch[0])
+            y_pred = predictor.predict_on_batch(batch[0])
 
-                output = y_pred[0]
-                action = y_pred[1]
-                action_calculated = y_pred[2]
-                x = y_pred[3]
-                h = y_pred[4]
-                policy = y_pred[5]
-                depth = y_pred[6]
+            output = y_pred[0]
+            action = y_pred[1]
+            action_calculated = y_pred[2]
+            x = y_pred[3]
+            h = y_pred[4]
+            policy = y_pred[5]
+            depth = y_pred[6]
 
-                error = -np.log(np.sum(output*batch[1], axis=1))
-                X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
-                loss2 = rl_model.train_on_batch(X,Y)
+            error = -np.log(np.sum(output*batch[1], axis=1))
+            X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
+            loss2 = rl_model.train_on_batch(X,Y)
 
-                loss2_total.append(loss2)
-                depth_total.append(depth[0])
+            loss2_total.append(loss2)
+            depth_total.append(depth[0])
 
-                predictor.get_layer('encoder').W_action_1.set_value(K.get_value(rl_model.get_layer('encoder').W_action_1))
-                predictor.get_layer('encoder').U_action_1.set_value(K.get_value(rl_model.get_layer('encoder').U_action_1))
-                predictor.get_layer('encoder').b_action_1.set_value(K.get_value(rl_model.get_layer('encoder').b_action_1))
-                predictor.get_layer('encoder').W_action_2.set_value(K.get_value(rl_model.get_layer('encoder').W_action_2))
-                predictor.get_layer('encoder').b_action_2.set_value(K.get_value(rl_model.get_layer('encoder').b_action_2))
+            predictor.get_layer('encoder').W_action_1.set_value(K.get_value(rl_model.get_layer('encoder').W_action_1))
+            predictor.get_layer('encoder').U_action_1.set_value(K.get_value(rl_model.get_layer('encoder').U_action_1))
+            predictor.get_layer('encoder').b_action_1.set_value(K.get_value(rl_model.get_layer('encoder').b_action_1))
+            predictor.get_layer('encoder').W_action_2.set_value(K.get_value(rl_model.get_layer('encoder').W_action_2))
+            predictor.get_layer('encoder').b_action_2.set_value(K.get_value(rl_model.get_layer('encoder').b_action_2))
 
-                if len(loss1_total) == 0:
-                    avg_loss1 = 0
-                else:
-                    avg_loss1 = np.sum(loss1_total)/len(loss1_total)
-                if len(acc_total) == 0:
-                    avg_acc = 0
-                else:
-                    avg_acc = np.sum(acc_total)/len(acc_total)
-                if len(loss2_total) == 0:
-                    avg_loss2 = 0
-                else:
-                    avg_loss2 = np.sum(loss2_total)/len(loss2_total)
-                if len(depth_total) == 0:
-                    avg_depth = 0
-                else:
-                    avg_depth = np.sum(depth_total)/len(depth_total)
+            if len(loss1_total) == 0:
+                avg_loss1 = 0
+            else:
+                avg_loss1 = np.sum(loss1_total)/len(loss1_total)
+            if len(acc_total) == 0:
+                avg_acc = 0
+            else:
+                avg_acc = np.sum(acc_total)/len(acc_total)
+            if len(loss2_total) == 0:
+                avg_loss2 = 0
+            else:
+                avg_loss2 = np.sum(loss2_total)/len(loss2_total)
+            if len(depth_total) == 0:
+                avg_depth = 0
+            else:
+                avg_depth = np.sum(depth_total)/len(depth_total)
 
-                sys.stdout.write("\r batch {} / {} {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
-                             .format(j+1, settings['steps'], i+1, block_count,
-                                     avg_loss1, avg_acc, avg_loss2, avg_depth))
-            sys.stdout.write("\n")
-            encoder.get_layer('encoder').W_action_1.set_value(K.get_value(rl_model.get_layer('encoder').W_action_1))
-            encoder.get_layer('encoder').U_action_1.set_value(K.get_value(rl_model.get_layer('encoder').U_action_1))
-            encoder.get_layer('encoder').b_action_1.set_value(K.get_value(rl_model.get_layer('encoder').b_action_1))
-            encoder.get_layer('encoder').W_action_2.set_value(K.get_value(rl_model.get_layer('encoder').W_action_2))
-            encoder.get_layer('encoder').b_action_2.set_value(K.get_value(rl_model.get_layer('encoder').b_action_2))
+            sys.stdout.write("\r batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
+                         .format(j+1, epoch,
+                                 avg_loss1, avg_acc, avg_loss2, avg_depth))
+        sys.stdout.write("\n")
+        encoder.get_layer('encoder').W_action_1.set_value(K.get_value(rl_model.get_layer('encoder').W_action_1))
+        encoder.get_layer('encoder').U_action_1.set_value(K.get_value(rl_model.get_layer('encoder').U_action_1))
+        encoder.get_layer('encoder').b_action_1.set_value(K.get_value(rl_model.get_layer('encoder').b_action_1))
+        encoder.get_layer('encoder').W_action_2.set_value(K.get_value(rl_model.get_layer('encoder').W_action_2))
+        encoder.get_layer('encoder').b_action_2.set_value(K.get_value(rl_model.get_layer('encoder').b_action_2))
 
         sys.stdout.write("\n")
         loss1_total = []
