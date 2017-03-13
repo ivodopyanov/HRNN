@@ -78,7 +78,7 @@ def init_settings():
     settings['max_len'] = 128
     settings['max_features']=10000
     settings['with_sentences']=False
-    settings['epochs'] = 100
+    settings['epochs'] = 10
     settings['random_action_prob'] = 0.0
     settings['mode'] = 0
     return settings
@@ -106,9 +106,6 @@ def prepare_objects(data, settings):
             'val_indexes': val_indexes}
 
 def build_encoder(data, settings):
-    depth = 1
-    if settings['mode'] == 1:
-        depth = settings['depth']
     sys.stdout.write('Building model\n')
     data_input = Input(shape=(settings['max_len'],))
     bucket_size_input = Input(shape=(1,),dtype="int32")
@@ -118,7 +115,7 @@ def build_encoder(data, settings):
                           mask_zero=True)(data_input)
     encoder = Encoder(input_dim=settings['word_embedding_size'],
                                    hidden_dim=settings['sentence_embedding_size'],
-                                   depth=depth,
+                                   depth=settings['depth'],
                                    action_dim=settings['action_dim'],
                                    batch_size = settings['batch_size'],
                                    max_len=settings['max_len'],
@@ -256,10 +253,10 @@ def run_training_RL(data, objects, settings):
     encoder = objects['encoder']
     predictor = objects['predictor']
     rl_model = objects['rl_model']
-    epoch_size = int(len(objects['train_indexes'])/(1*settings['batch_size']))
-    val_epoch_size = int(len(objects['val_indexes'])/(1*settings['batch_size']))
+    epoch_size = int(len(objects['train_indexes'])/(1000*settings['batch_size']))
+    val_epoch_size = int(len(objects['val_indexes'])/(100*settings['batch_size']))
 
-    sys.stdout.write("Train epoch size = {}; val epoch size = {}".format(epoch_size, val_epoch_size))
+    sys.stdout.write("\nTrain epoch size = {}; val epoch size = {}".format(epoch_size, val_epoch_size))
 
     for epoch in range(settings['epochs']):
         sys.stdout.write("\n\nEpoch {}\n".format(epoch+1))
@@ -267,8 +264,8 @@ def run_training_RL(data, objects, settings):
         acc_total = []
         loss2_total = []
         depth_total = []
-        batch = next(objects['data_gen'])
         for j in range(epoch_size):
+            batch = next(objects['data_gen'])
             loss1 = encoder.train_on_batch(batch[0], batch[1])
             loss1_total.append(loss1[0])
             acc_total.append(loss1[1])
@@ -300,19 +297,20 @@ def run_training_RL(data, objects, settings):
                          .format(j+1, epoch_size,
                                  avg_loss1, avg_acc, avg_loss2, avg_depth))
 
-        if settings['mode'] == 1:
-            predictor.get_layer('emb').W.set_value(K.get_value(encoder.get_layer('emb').W))
-            predictor.get_layer('encoder').W_emb.set_value(K.get_value(encoder.get_layer('encoder').W_emb))
-            predictor.get_layer('encoder').b_emb.set_value(K.get_value(encoder.get_layer('encoder').b_emb))
-            predictor.get_layer('encoder').W.set_value(K.get_value(encoder.get_layer('encoder').W))
-            predictor.get_layer('encoder').U.set_value(K.get_value(encoder.get_layer('encoder').U))
-            predictor.get_layer('encoder').b.set_value(K.get_value(encoder.get_layer('encoder').b))
-            predictor.get_layer('dense_0').W.set_value(K.get_value(encoder.get_layer('dense_0').W))
-            predictor.get_layer('dense_0').b.set_value(K.get_value(encoder.get_layer('dense_0').b))
-            predictor.get_layer('output').W.set_value(K.get_value(encoder.get_layer('output').W))
-            predictor.get_layer('output').b.set_value(K.get_value(encoder.get_layer('output').b))
-            for j in range(epoch_size):
 
+        predictor.get_layer('emb').W.set_value(K.get_value(encoder.get_layer('emb').W))
+        predictor.get_layer('encoder').W_emb.set_value(K.get_value(encoder.get_layer('encoder').W_emb))
+        predictor.get_layer('encoder').b_emb.set_value(K.get_value(encoder.get_layer('encoder').b_emb))
+        predictor.get_layer('encoder').W.set_value(K.get_value(encoder.get_layer('encoder').W))
+        predictor.get_layer('encoder').U.set_value(K.get_value(encoder.get_layer('encoder').U))
+        predictor.get_layer('encoder').b.set_value(K.get_value(encoder.get_layer('encoder').b))
+        predictor.get_layer('dense_0').W.set_value(K.get_value(encoder.get_layer('dense_0').W))
+        predictor.get_layer('dense_0').b.set_value(K.get_value(encoder.get_layer('dense_0').b))
+        predictor.get_layer('output').W.set_value(K.get_value(encoder.get_layer('output').W))
+        predictor.get_layer('output').b.set_value(K.get_value(encoder.get_layer('output').b))
+        if settings['mode'] == 1:
+            for j in range(epoch_size):
+                batch = next(objects['data_gen'])
                 y_pred = predictor.predict_on_batch(batch[0])
 
                 output = y_pred[0]
@@ -370,40 +368,30 @@ def run_training_RL(data, objects, settings):
         depth_total = []
         for i in range(val_epoch_size):
             batch = next(objects['val_gen'])
-            if settings['mode'] == 0:
-                loss1 = encoder.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
+            loss1 = encoder.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
+            y_pred = predictor.predict_on_batch(batch[0])
 
-                loss1_total.append(loss1[0])
-                acc_total.append(loss1[1])
-                sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}"
-                                 .format(i+1, val_epoch_size,
-                                         np.sum(loss1_total)/len(loss1_total),
-                                         np.sum(acc_total)/len(acc_total)))
-            else:
-                loss1 = encoder.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
-                y_pred = predictor.predict_on_batch(batch[0])
+            output = y_pred[0]
+            action = y_pred[1]
+            action_calculated = y_pred[2]
+            x = y_pred[3]
+            h = y_pred[4]
+            policy = y_pred[5]
+            depth = y_pred[6]
+            error = -np.log(np.sum(output*batch[1], axis=1))
+            X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
+            loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
 
-                output = y_pred[0]
-                action = y_pred[1]
-                action_calculated = y_pred[2]
-                x = y_pred[3]
-                h = y_pred[4]
-                policy = y_pred[5]
-                depth = y_pred[6]
-                error = -np.log(np.sum(output*batch[1], axis=1))
-                X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
-                loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
-
-                loss2_total.append(loss2)
-                depth_total.append(depth[0])
-                loss1_total.append(loss1[0])
-                acc_total.append(loss1[1])
-                sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
-                                 .format(i+1, val_epoch_size,
-                                         np.sum(loss1_total)/len(loss1_total),
-                                         np.sum(acc_total)/len(acc_total),
-                                         np.sum(loss2_total)/len(loss2_total),
-                                         np.sum(depth_total)/len(depth_total)))
+            loss2_total.append(loss2)
+            depth_total.append(depth[0])
+            loss1_total.append(loss1[0])
+            acc_total.append(loss1[1])
+            sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
+                             .format(i+1, val_epoch_size,
+                                     np.sum(loss1_total)/len(loss1_total),
+                                     np.sum(acc_total)/len(acc_total),
+                                     np.sum(loss2_total)/len(loss2_total),
+                                     np.sum(depth_total)/len(depth_total)))
 
 
 
@@ -455,7 +443,6 @@ def train(filename):
     #run_training(data, objects)
     run_training_RL(data, objects, settings)
     settings['mode']=1
-    objects = rebuild_encoder(data, objects, settings)
     run_training_RL(data, objects, settings)
     #save(objects, filename)
 
