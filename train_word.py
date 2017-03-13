@@ -71,7 +71,7 @@ def init_settings():
     settings['dropout_W'] = 0.0
     settings['dropout_U'] = 0.0
     settings['dropout_action'] = 0.0
-    settings['hidden_dims'] = [64]
+    settings['hidden_dims'] = [128]
     settings['dense_dropout'] = 0.5
     settings['bucket_size_step'] = 4
     settings['batch_size'] = 6
@@ -80,6 +80,7 @@ def init_settings():
     settings['with_sentences']=False
     settings['epochs'] = 100
     settings['random_action_prob'] = 0.0
+    settings['mode'] = 0
     return settings
 
 def prepare_objects(data, settings):
@@ -108,6 +109,7 @@ def build_encoder(data, settings):
     sys.stdout.write('Building model\n')
     data_input = Input(shape=(settings['max_len'],))
     bucket_size_input = Input(shape=(1,),dtype="int32")
+    mode_input = Input(shape=(1,), dtype="int32")
     embedding = Embedding(input_dim=settings['max_features']+3,
                           output_dim=settings['word_embedding_size'],
                           name='emb',
@@ -121,7 +123,7 @@ def build_encoder(data, settings):
                                    dropout_u=settings['dropout_U'],
                                    dropout_w=settings['dropout_W'],
                                    dropout_action=settings['dropout_action'],
-                                   name='encoder')([embedding, bucket_size_input])
+                                   name='encoder')([embedding, bucket_size_input, mode_input])
     layer = encoder
 
     for idx, hidden_dim in enumerate(settings['hidden_dims']):
@@ -129,7 +131,7 @@ def build_encoder(data, settings):
         layer = Activation('tanh')(layer)
         layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(input=[data_input, bucket_size_input], output=output)
+    model = Model(input=[data_input, bucket_size_input, mode_input], output=output)
     optimizer = Adam(lr=0.001, clipnorm=5)
     model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=['accuracy'])
     return model
@@ -138,6 +140,7 @@ def build_predictor(data, settings):
     sys.stdout.write('Building model\n')
     data_input = Input(shape=(settings['max_len'],))
     bucket_size_input = Input(shape=(1,),dtype="int32")
+    mode_input = Input(shape=(1,), dtype="int32")
     embedding = Embedding(input_dim=settings['max_features']+3,
                           output_dim=settings['word_embedding_size'],
                           name='emb',
@@ -149,7 +152,7 @@ def build_predictor(data, settings):
                                      batch_size=settings['batch_size'],
                                      max_len=settings['max_len'],
                                      random_action_prob=settings['random_action_prob'],
-                                     name='encoder')([embedding, bucket_size_input])
+                                     name='encoder')([embedding, bucket_size_input, mode_input])
     layer = encoder[0]
 
     for idx, hidden_dim in enumerate(settings['hidden_dims']):
@@ -157,7 +160,7 @@ def build_predictor(data, settings):
         layer = Activation('tanh')(layer)
         layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(input=[data_input, bucket_size_input], output=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6]])
+    model = Model(input=[data_input, bucket_size_input, mode_input], output=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6]])
     optimizer = Adam(lr=0.001, clipnorm=5)
     #model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=['accuracy'])
     return model
@@ -197,10 +200,12 @@ def build_generator_HRNN(data, settings, indexes):
 
                 bucket_size_input = np.zeros((settings['batch_size'],1), dtype=int)
                 bucket_size_input[0][0]=bucket_size
+                mode_input = np.zeros((settings['batch_size'],1), dtype=int)
+                mode_input[0][0]=settings['mode']
                 if settings['with_sentences']:
-                    yield [X, bucket_size_input], Y, batch_sentences
+                    yield [X, bucket_size_input, mode_input], Y, batch_sentences
                 else:
-                    yield [X, bucket_size_input], Y
+                    yield [X, bucket_size_input, mode_input], Y
     return generator()
 
 def build_batch(data, settings, sentence_batch):
@@ -236,6 +241,8 @@ def run_training_RL(data, objects, settings):
     epoch_size = int(len(objects['train_indexes'])/(1*settings['batch_size']))
     val_epoch_size = int(len(objects['val_indexes'])/(1*settings['batch_size']))
 
+    sys.stdout.write("Train epoch size = {}; val epoch size = {}".format(epoch_size, val_epoch_size))
+
     for epoch in range(settings['epochs']):
         sys.stdout.write("\n\nEpoch {}\n".format(epoch+1))
         loss1_total = []
@@ -266,7 +273,7 @@ def run_training_RL(data, objects, settings):
                 avg_depth = np.sum(depth_total)/len(depth_total)
 
             sys.stdout.write("\r batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
-                         .format(j+1, epoch,
+                         .format(j+1, epoch_size,
                                  avg_loss1, avg_acc, avg_loss2, avg_depth))
 
         predictor.get_layer('emb').W.set_value(K.get_value(encoder.get_layer('emb').W))
@@ -279,57 +286,59 @@ def run_training_RL(data, objects, settings):
         predictor.get_layer('dense_0').b.set_value(K.get_value(encoder.get_layer('dense_0').b))
         predictor.get_layer('output').W.set_value(K.get_value(encoder.get_layer('output').W))
         predictor.get_layer('output').b.set_value(K.get_value(encoder.get_layer('output').b))
-        for j in range(epoch):
 
-            y_pred = predictor.predict_on_batch(batch[0])
+        if settings['mode'] == 1:
+            for j in range(epoch_size):
 
-            output = y_pred[0]
-            action = y_pred[1]
-            action_calculated = y_pred[2]
-            x = y_pred[3]
-            h = y_pred[4]
-            policy = y_pred[5]
-            depth = y_pred[6]
+                y_pred = predictor.predict_on_batch(batch[0])
 
-            error = -np.log(np.sum(output*batch[1], axis=1))
-            X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
-            loss2 = rl_model.train_on_batch(X,Y)
+                output = y_pred[0]
+                action = y_pred[1]
+                action_calculated = y_pred[2]
+                x = y_pred[3]
+                h = y_pred[4]
+                policy = y_pred[5]
+                depth = y_pred[6]
 
-            loss2_total.append(loss2)
-            depth_total.append(depth[0])
+                error = -np.log(np.sum(output*batch[1], axis=1))
+                X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
+                loss2 = rl_model.train_on_batch(X,Y)
 
-            predictor.get_layer('encoder').W_action_1.set_value(K.get_value(rl_model.get_layer('encoder').W_action_1))
-            predictor.get_layer('encoder').U_action_1.set_value(K.get_value(rl_model.get_layer('encoder').U_action_1))
-            predictor.get_layer('encoder').b_action_1.set_value(K.get_value(rl_model.get_layer('encoder').b_action_1))
-            predictor.get_layer('encoder').W_action_2.set_value(K.get_value(rl_model.get_layer('encoder').W_action_2))
-            predictor.get_layer('encoder').b_action_2.set_value(K.get_value(rl_model.get_layer('encoder').b_action_2))
+                loss2_total.append(loss2)
+                depth_total.append(depth[0])
 
-            if len(loss1_total) == 0:
-                avg_loss1 = 0
-            else:
-                avg_loss1 = np.sum(loss1_total)/len(loss1_total)
-            if len(acc_total) == 0:
-                avg_acc = 0
-            else:
-                avg_acc = np.sum(acc_total)/len(acc_total)
-            if len(loss2_total) == 0:
-                avg_loss2 = 0
-            else:
-                avg_loss2 = np.sum(loss2_total)/len(loss2_total)
-            if len(depth_total) == 0:
-                avg_depth = 0
-            else:
-                avg_depth = np.sum(depth_total)/len(depth_total)
+                predictor.get_layer('encoder').W_action_1.set_value(K.get_value(rl_model.get_layer('encoder').W_action_1))
+                predictor.get_layer('encoder').U_action_1.set_value(K.get_value(rl_model.get_layer('encoder').U_action_1))
+                predictor.get_layer('encoder').b_action_1.set_value(K.get_value(rl_model.get_layer('encoder').b_action_1))
+                predictor.get_layer('encoder').W_action_2.set_value(K.get_value(rl_model.get_layer('encoder').W_action_2))
+                predictor.get_layer('encoder').b_action_2.set_value(K.get_value(rl_model.get_layer('encoder').b_action_2))
 
-            sys.stdout.write("\r batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
-                         .format(j+1, epoch,
-                                 avg_loss1, avg_acc, avg_loss2, avg_depth))
-        sys.stdout.write("\n")
-        encoder.get_layer('encoder').W_action_1.set_value(K.get_value(rl_model.get_layer('encoder').W_action_1))
-        encoder.get_layer('encoder').U_action_1.set_value(K.get_value(rl_model.get_layer('encoder').U_action_1))
-        encoder.get_layer('encoder').b_action_1.set_value(K.get_value(rl_model.get_layer('encoder').b_action_1))
-        encoder.get_layer('encoder').W_action_2.set_value(K.get_value(rl_model.get_layer('encoder').W_action_2))
-        encoder.get_layer('encoder').b_action_2.set_value(K.get_value(rl_model.get_layer('encoder').b_action_2))
+                if len(loss1_total) == 0:
+                    avg_loss1 = 0
+                else:
+                    avg_loss1 = np.sum(loss1_total)/len(loss1_total)
+                if len(acc_total) == 0:
+                    avg_acc = 0
+                else:
+                    avg_acc = np.sum(acc_total)/len(acc_total)
+                if len(loss2_total) == 0:
+                    avg_loss2 = 0
+                else:
+                    avg_loss2 = np.sum(loss2_total)/len(loss2_total)
+                if len(depth_total) == 0:
+                    avg_depth = 0
+                else:
+                    avg_depth = np.sum(depth_total)/len(depth_total)
+
+                sys.stdout.write("\r batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
+                             .format(j+1, epoch_size,
+                                     avg_loss1, avg_acc, avg_loss2, avg_depth))
+            sys.stdout.write("\n")
+            encoder.get_layer('encoder').W_action_1.set_value(K.get_value(rl_model.get_layer('encoder').W_action_1))
+            encoder.get_layer('encoder').U_action_1.set_value(K.get_value(rl_model.get_layer('encoder').U_action_1))
+            encoder.get_layer('encoder').b_action_1.set_value(K.get_value(rl_model.get_layer('encoder').b_action_1))
+            encoder.get_layer('encoder').W_action_2.set_value(K.get_value(rl_model.get_layer('encoder').W_action_2))
+            encoder.get_layer('encoder').b_action_2.set_value(K.get_value(rl_model.get_layer('encoder').b_action_2))
 
         sys.stdout.write("\n")
         loss1_total = []
@@ -411,6 +420,8 @@ def train(filename):
     #load(objects, filename)
     sys.stdout.write('Compiling model\n')
     #run_training(data, objects)
+    run_training_RL(data, objects, settings)
+    settings['mode']=1
     run_training_RL(data, objects, settings)
     #save(objects, filename)
 

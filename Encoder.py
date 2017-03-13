@@ -5,6 +5,7 @@ from keras.engine import Layer
 import numpy as np
 import theano as T
 import theano.tensor as TS
+from theano.ifelse import ifelse
 from theano.printing import Print
 
 
@@ -38,6 +39,7 @@ class Encoder(Layer):
         self.gamma_init = initializations.get('one')
         self.beta_init = initializations.get('zero')
         self.epsilon = 1e-5
+        self.mode = 0
 
         if self.dropout_w or self.dropout_u or self.dropout_action:
             self.uses_learning_phase = True
@@ -79,6 +81,7 @@ class Encoder(Layer):
 
         # Keras doesn't allow 1D model inputs - so that tensor have shape (1,1) instead of scalar or (1,)
         bucket_size = input[1][0][0]
+        mode = input[2][0][0]
 
         data_mask = mask[0]
         if data_mask.ndim == x.ndim-1:
@@ -98,13 +101,19 @@ class Encoder(Layer):
         eos_mask = K.concatenate([data_mask[1:], first_mask], axis=0)
         eos_mask = TS.cast(data_mask*(1-eos_mask), "int8")
 
+
+
         results, _ = T.scan(self.vertical_step,
                             outputs_info=[x, initial_action, data_mask],
                             non_sequences=[bucket_size, eos_mask, K.zeros((self.batch_size), dtype="int8")],
                             n_steps=self.depth-1)
 
+        x = ifelse(TS.eq(mode, 0), x, results[0][-1])
+        initial_action = ifelse(TS.eq(mode, 0), initial_action, results[1][-1])
+        data_mask = ifelse(TS.eq(mode, 0), data_mask, results[2][-1])
+
         results, _ = T.scan(self.vertical_step,
-                            outputs_info=[results[0][-1], results[1][-1], results[2][-1]],
+                            outputs_info=[x, initial_action, data_mask],
                             non_sequences=[bucket_size, eos_mask, K.ones((self.batch_size), dtype="int8")],
                             n_steps=1)
 
