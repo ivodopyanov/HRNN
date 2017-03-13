@@ -80,7 +80,7 @@ def init_settings():
     settings['with_sentences']=False
     settings['epochs'] = 100
     settings['random_action_prob'] = 0.0
-    settings['rl_train_speed_ratio'] = 3
+    settings['rl_train_speed_ratio'] = 10
     return settings
 
 def prepare_objects(data, settings):
