@@ -435,7 +435,7 @@ def run_training_RL2(data, objects, settings):
             policy = y_pred[5]
             depth = y_pred[6]
 
-            error = np.sum(output*batch[1], axis=1)
+            error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), 1000)
             X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
             loss2 = rl_model.train_on_batch(X,Y)
 
@@ -491,7 +491,7 @@ def run_training_RL2(data, objects, settings):
             h = y_pred[4]
             policy = y_pred[5]
             depth = y_pred[6]
-            error = np.sum(output*batch[1], axis=1)
+            error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), 1000)
             X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
             loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
 

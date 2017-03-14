@@ -41,5 +41,5 @@ class RL_Layer(Layer):
         h_tm1 = input[1]
 
         policy = activations.relu(K.dot(x, self.W_action_1) + K.dot(h_tm1, self.U_action_1) + self.b_action_1)
-        policy = K.sigmoid(K.dot(policy, self.W_action_2)+self.b_action_2)
+        policy = K.minimum(K.exp(K.dot(policy, self.W_action_2)+self.b_action_2),1000)
         return policy
