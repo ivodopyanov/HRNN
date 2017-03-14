@@ -39,6 +39,8 @@ class Predictor(Layer):
         self.gamma_init = initializations.get('one')
         self.beta_init = initializations.get('zero')
         self.epsilon = 1e-5
+        if self.dropout_w or self.dropout_u or self.dropout_action:
+            self.uses_learning_phase = True
         super(Predictor, self).__init__(**kwargs)
 
 

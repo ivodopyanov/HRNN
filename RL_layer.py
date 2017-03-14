@@ -5,16 +5,19 @@ from keras.engine import Layer
 import theano.tensor as TS
 
 class RL_Layer(Layer):
-    def __init__(self,hidden_dim, action_dim,
+    def __init__(self,hidden_dim, action_dim, dropout_action,
                  init='glorot_uniform', inner_init='orthogonal',
                  activation='tanh', inner_activation='hard_sigmoid',
                  **kwargs):
         self.hidden_dim = hidden_dim
         self.action_dim = action_dim
+        self.dropout_action = dropout_action
         self.init = initializations.get(init)
         self.inner_init = initializations.get(inner_init)
         self.activation = activations.get(activation)
         self.inner_activation = activations.get(inner_activation)
+        if self.dropout_action:
+            self.uses_learning_phase = True
         super(RL_Layer, self).__init__(**kwargs)
 
 
@@ -40,6 +43,12 @@ class RL_Layer(Layer):
         x = input[0]
         h_tm1 = input[1]
 
+        if 0 < self.dropout_action < 1:
+            ones = K.ones((self.action_dim))
+            B_action = K.in_train_phase(K.dropout(ones, self.dropout_action), ones)
+        else:
+            B_action = K.cast_to_floatx(1.)
+
         policy = activations.relu(K.dot(x, self.W_action_1) + K.dot(h_tm1, self.U_action_1) + self.b_action_1)
-        policy = K.minimum(K.exp(K.dot(policy, self.W_action_2)+self.b_action_2),1000)
+        policy = K.minimum(K.exp(K.dot(policy*B_action, self.W_action_2)+self.b_action_2),1000)
         return policy

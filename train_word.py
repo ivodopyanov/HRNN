@@ -68,9 +68,9 @@ def init_settings():
     settings['sentence_embedding_size'] = 128
     settings['depth'] = 20
     settings['action_dim'] = 128
-    settings['dropout_W'] = 0.0
-    settings['dropout_U'] = 0.0
-    settings['dropout_action'] = 0.0
+    settings['dropout_W'] = 0.5
+    settings['dropout_U'] = 0.5
+    settings['dropout_action'] = 0.5
     settings['hidden_dims'] = [128]
     settings['dense_dropout'] = 0.5
     settings['bucket_size_step'] = 4
@@ -79,7 +79,7 @@ def init_settings():
     settings['max_features']=10000
     settings['with_sentences']=False
     settings['epochs'] = 10
-    settings['random_action_prob'] = 0.0
+    settings['random_action_prob'] = 0.05
     settings['mode'] = 0
     return settings
 
@@ -169,7 +169,7 @@ def build_predictor(data, settings):
 def build_RL_model(settings):
     x_input = Input(shape=(settings['sentence_embedding_size'],))
     h_tm1_input = Input(shape=(settings['sentence_embedding_size'],))
-    layer = RL_Layer(settings['sentence_embedding_size'], settings['action_dim'], name='encoder')([x_input, h_tm1_input])
+    layer = RL_Layer(settings['sentence_embedding_size'], settings['action_dim'], dropout_action=settings['dropout_action'], name='encoder')([x_input, h_tm1_input])
     model = Model(input=[x_input, h_tm1_input], output=layer)
     optimizer = Adam(clipvalue=5)
     model.compile(loss='mse', optimizer=optimizer)
@@ -658,7 +658,7 @@ def train(filename):
     #load(objects, filename)
     sys.stdout.write('Compiling model\n')
     #run_training(data, objects)
-    run_training_encoder_only(data, objects, settings)
+    #run_training_encoder_only(data, objects, settings)
     run_training_RL_only(data, objects, settings)
     #save(objects, filename)
 
