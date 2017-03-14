@@ -150,6 +150,9 @@ def build_predictor(data, settings):
                                      batch_size=settings['batch_size'],
                                      max_len=settings['max_len'],
                                      random_action_prob=settings['random_action_prob'],
+                                     dropout_u=settings['dropout_U'],
+                                     dropout_w=settings['dropout_W'],
+                                     dropout_action=settings['dropout_action'],
                                      name='encoder')([embedding, bucket_size_input])
     layer = encoder[0]
 
