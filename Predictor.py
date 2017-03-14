@@ -56,8 +56,8 @@ class Predictor(Layer):
         self.U_action_1 = self.inner_init((self.hidden_dim, self.action_dim), name='{}_U_action_1'.format(self.name))
         self.b_action_1 = K.zeros((self.action_dim,), name='{}_b_action_1'.format(self.name))
 
-        self.W_action_2 = self.init((self.action_dim,2), name='{}_W_action_2'.format(self.name))
-        self.b_action_2 = K.zeros((2,), name='{}_b_action_2'.format(self.name))
+        self.W_action_2 = K.zeros((self.action_dim,2), name='{}_W_action_2'.format(self.name))
+        self.b_action_2 = K.variable([1, -1], name='{}_b_action_2'.format(self.name))
 
 
         self.gammas = K.ones((2, 3*self.hidden_dim), name="gammas")

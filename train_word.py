@@ -559,17 +559,14 @@ def run_training_RL_only(data, objects, settings):
     rl_model = objects['rl_model']
     epoch_size = int(len(objects['train_indexes'])/(1*settings['batch_size']))
     val_epoch_size = int(len(objects['val_indexes'])/(1*settings['batch_size']))
-
     sys.stdout.write("\nTrain epoch size = {}; val epoch size = {}".format(epoch_size, val_epoch_size))
-
     for epoch in range(settings['epochs']):
         sys.stdout.write("\n\nEpoch {}\n".format(epoch+1))
         loss2_total = []
         depth_total = []
         for j in range(epoch_size):
-
+            batch = next(objects['data_gen'])
             y_pred = predictor.predict_on_batch(batch[0])
-
             output = y_pred[0]
             action = y_pred[1]
             action_calculated = y_pred[2]
@@ -577,16 +574,12 @@ def run_training_RL_only(data, objects, settings):
             h = y_pred[4]
             policy = y_pred[5]
             depth = y_pred[6]
-
             error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), 1000)
             X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
             loss2 = rl_model.train_on_batch(X,Y)
-
             loss2_total.append(loss2)
             depth_total.append(depth[0])
-
             copy_weights_rl_to_predictor(objects)
-
             if len(loss2_total) == 0:
                 avg_loss2 = 0
             else:
@@ -595,11 +588,8 @@ def run_training_RL_only(data, objects, settings):
                 avg_depth = 0
             else:
                 avg_depth = np.sum(depth_total)/len(depth_total)
-
-            sys.stdout.write("\r batch {} / {}: loss2 = {:.4f}, avg depth = {:.2f}"
-                         .format(j+1, epoch_size, avg_loss2, avg_depth))
+            sys.stdout.write("\r batch {} / {}: loss2 = {:.4f}, avg depth = {:.2f}".format(j+1, epoch_size, avg_loss2, avg_depth))
             copy_weights_rl_to_encoder(objects)
-
         sys.stdout.write("\n")
         loss1_total = []
         acc_total = []
@@ -609,7 +599,6 @@ def run_training_RL_only(data, objects, settings):
             batch = next(objects['val_gen'])
             loss1 = encoder.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
             y_pred = predictor.predict_on_batch(batch[0])
-
             output = y_pred[0]
             action = y_pred[1]
             action_calculated = y_pred[2]
@@ -620,7 +609,6 @@ def run_training_RL_only(data, objects, settings):
             error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), 1000)
             X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
             loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
-
             loss2_total.append(loss2)
             depth_total.append(depth[0])
             loss1_total.append(loss1[0])
@@ -635,25 +623,18 @@ def run_training_RL_only(data, objects, settings):
 def restore_exp(settings, x, total_error, h, policy, fk_calculated):
     error_mult = np.repeat(np.expand_dims(total_error, axis=1), fk_calculated.shape[1], axis=1)
     error_mult = np.repeat(np.expand_dims(error_mult, axis=2), fk_calculated.shape[2], axis=2)
-
     chosen_action = np.less_equal(policy[:,:,:,0], policy[:,:,:,1])
     shift_action_mask = np.ones_like(error_mult)*chosen_action
     reduce_action_mask = np.ones_like(error_mult)*(1-chosen_action)
-
     shift_action_policy = np.concatenate((np.expand_dims(shift_action_mask*error_mult, axis=3), np.expand_dims(policy[:,:,:,1], axis=3)), axis=3)
     shift_action_policy = np.repeat(np.expand_dims(shift_action_mask, axis=3), 2, axis=3)*shift_action_policy
-
     reduce_action_policy = np.concatenate((np.expand_dims(policy[:,:,:,0], axis=3), np.expand_dims(reduce_action_mask*error_mult, axis=3)), axis=3)
     reduce_action_policy = np.repeat(np.expand_dims(reduce_action_mask, axis=3), 2, axis=3)*reduce_action_policy
-
     new_policy = shift_action_policy + reduce_action_policy
-
     decision_performed = np.where(fk_calculated == 1)
     x_value_input = x[decision_performed]
     h_value_input = h[decision_performed]
     policy_output = new_policy[decision_performed]
-
-
     return [x_value_input, h_value_input], policy_output
 
 
@@ -677,9 +658,8 @@ def train(filename):
     #load(objects, filename)
     sys.stdout.write('Compiling model\n')
     #run_training(data, objects)
-    run_training2(data, objects, settings)
-    settings['mode']=1
-    run_training2(data, objects, settings)
+    run_training_encoder_only(data, objects, settings)
+    run_training_RL_only(data, objects, settings)
     #save(objects, filename)
 
 
