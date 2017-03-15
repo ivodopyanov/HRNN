@@ -235,12 +235,12 @@ class Predictor(Layer):
         action_calculated = TS.cast(action_calculated, "int8")
 
         # Actual new hidden state if node got info from left and from below
-        s1 = K.dot(x*B_W, self.W) + self.b
-        s2 = K.dot(h_tm1*B_U, self.U[:,:2*self.hidden_dim])
+        s1 = self.ln(K.dot(x*B_W, self.W) + self.b, self.gammas[0], self.betas[0])
+        s2 = self.ln(K.dot(h_tm1*B_U, self.U[:,:2*self.hidden_dim]), self.gammas[1,:2*self.hidden_dim], self.betas[1,:2*self.hidden_dim])
         s = K.hard_sigmoid(s1[:,:2*self.hidden_dim] + s2)
         z = s[:,:self.hidden_dim]
         r = s[:,self.hidden_dim:2*self.hidden_dim]
-        h_ = z*h_tm1 + (1-z)*K.tanh(s1[:,2*self.hidden_dim:] + K.dot(r*h_tm1*B_U, self.U[:,2*self.hidden_dim:]))
+        h_ = z*h_tm1 + (1-z)*K.tanh(s1[:,2*self.hidden_dim:] + self.ln(K.dot(r*h_tm1*B_U, self.U[:,2*self.hidden_dim:]), self.gammas[1,2*self.hidden_dim:], self.betas[1,2*self.hidden_dim:]))
 
         zeros = K.zeros((self.batch_size, self.hidden_dim))
         both = (1-action_prev)*data_mask_prev*action*data_mask_tm1

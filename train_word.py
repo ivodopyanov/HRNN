@@ -382,10 +382,13 @@ def copy_weights_encoder_to_predictor(objects):
     predictor.get_layer('encoder').W.set_value(K.get_value(encoder.get_layer('encoder').W))
     predictor.get_layer('encoder').U.set_value(K.get_value(encoder.get_layer('encoder').U))
     predictor.get_layer('encoder').b.set_value(K.get_value(encoder.get_layer('encoder').b))
+    predictor.get_layer('encoder').gammas.set_value(K.get_value(encoder.get_layer('encoder').gammas))
+    predictor.get_layer('encoder').betas.set_value(K.get_value(encoder.get_layer('encoder').betas))
     predictor.get_layer('dense_0').W.set_value(K.get_value(encoder.get_layer('dense_0').W))
     predictor.get_layer('dense_0').b.set_value(K.get_value(encoder.get_layer('dense_0').b))
     predictor.get_layer('output').W.set_value(K.get_value(encoder.get_layer('output').W))
     predictor.get_layer('output').b.set_value(K.get_value(encoder.get_layer('output').b))
+
 
 def copy_weights_rl_to_predictor(objects):
     predictor = objects['predictor']
@@ -409,8 +412,8 @@ def run_training2(data, objects, settings):
     encoder = objects['encoder']
     predictor = objects['predictor']
     rl_model = objects['rl_model']
-    epoch_size = int(len(objects['train_indexes'])/(1000*settings['batch_size']))
-    val_epoch_size = int(len(objects['val_indexes'])/(100*settings['batch_size']))
+    epoch_size = int(len(objects['train_indexes'])/(1*settings['batch_size']))
+    val_epoch_size = int(len(objects['val_indexes'])/(1*settings['batch_size']))
 
     sys.stdout.write("\nTrain epoch size = {}; val epoch size = {}".format(epoch_size, val_epoch_size))
 

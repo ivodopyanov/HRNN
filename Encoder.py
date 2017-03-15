@@ -64,9 +64,9 @@ class Encoder(Layer):
         self.W_action_2 = K.zeros((self.action_dim,2), name='{}_W_action_2'.format(self.name))
         self.b_action_2 = K.variable([1, -1], name='{}_b_action_2'.format(self.name))
 
-        self.gammas = K.ones((2, 3*self.hidden_dim), name="gammas")
-        self.betas = K.zeros((2, 3*self.hidden_dim), name="betas")
-        self.trainable_weights = [self.W_emb, self.b_emb, self.W ,self.U , self.b]
+        self.gammas = K.ones((2, 3*self.hidden_dim,), name="gammas")
+        self.betas = K.zeros((2, 3*self.hidden_dim,), name="betas")
+        self.trainable_weights = [self.W_emb, self.b_emb, self.W ,self.U , self.b, self.gammas, self.betas]
         self.built = True
 
     def compute_mask(self, input, input_mask=None):
@@ -201,12 +201,12 @@ class Encoder(Layer):
         action = TS.cast(action, "int8")
 
         # Actual new hidden state if node got info from left and from below
-        s1 = K.dot(x*B_W, self.W) + self.b
-        s2 = K.dot(h_tm1*B_U, self.U[:,:2*self.hidden_dim])
+        s1 = self.ln(K.dot(x*B_W, self.W) + self.b, self.gammas[0], self.betas[0])
+        s2 = self.ln(K.dot(h_tm1*B_U, self.U[:,:2*self.hidden_dim]), self.gammas[1,:2*self.hidden_dim], self.betas[1,:2*self.hidden_dim])
         s = K.hard_sigmoid(s1[:,:2*self.hidden_dim] + s2)
         z = s[:,:self.hidden_dim]
         r = s[:,self.hidden_dim:2*self.hidden_dim]
-        h_ = z*h_tm1 + (1-z)*K.tanh(s1[:,2*self.hidden_dim:] + K.dot(r*h_tm1*B_U, self.U[:,2*self.hidden_dim:]))
+        h_ = z*h_tm1 + (1-z)*K.tanh(s1[:,2*self.hidden_dim:] + self.ln(K.dot(r*h_tm1*B_U, self.U[:,2*self.hidden_dim:]), self.gammas[1,2*self.hidden_dim:], self.betas[1,2*self.hidden_dim:]))
 
 
         zeros = K.zeros((self.batch_size, self.hidden_dim))
