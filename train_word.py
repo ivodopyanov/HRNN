@@ -66,7 +66,7 @@ def init_settings():
     settings = {}
     settings['word_embedding_size'] = 128
     settings['sentence_embedding_size'] = 128
-    settings['depth'] = 20
+    settings['depth'] = 4
     settings['action_dim'] = 128
     settings['dropout_W'] = 0.5
     settings['dropout_U'] = 0.5
@@ -79,7 +79,7 @@ def init_settings():
     settings['max_features']=10000
     settings['with_sentences']=False
     settings['epochs'] = 10
-    settings['random_action_prob'] = 0.05
+    settings['random_action_prob'] = 0
     settings['mode'] = 0
     return settings
 
@@ -409,8 +409,8 @@ def run_training2(data, objects, settings):
     encoder = objects['encoder']
     predictor = objects['predictor']
     rl_model = objects['rl_model']
-    epoch_size = int(len(objects['train_indexes'])/(1*settings['batch_size']))
-    val_epoch_size = int(len(objects['val_indexes'])/(1*settings['batch_size']))
+    epoch_size = int(len(objects['train_indexes'])/(1000*settings['batch_size']))
+    val_epoch_size = int(len(objects['val_indexes'])/(100*settings['batch_size']))
 
     sys.stdout.write("\nTrain epoch size = {}; val epoch size = {}".format(epoch_size, val_epoch_size))
 
@@ -657,9 +657,9 @@ def train(filename):
     objects = prepare_objects(data, settings)
     #load(objects, filename)
     sys.stdout.write('Compiling model\n')
-    #run_training(data, objects)
+    run_training2(data, objects, settings)
     #run_training_encoder_only(data, objects, settings)
-    run_training_RL_only(data, objects, settings)
+    #run_training_RL_only(data, objects, settings)
     #save(objects, filename)
 
 
