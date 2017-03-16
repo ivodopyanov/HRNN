@@ -19,7 +19,7 @@ class RL_Layer(Layer):
         self.inner_init = initializations.get(inner_init)
         self.activation = activations.get(activation)
         self.inner_activation = activations.get(inner_activation)
-        if self.dropout_action:
+        if self.dropout_w or self.dropout_u or self.dropout_action:
             self.uses_learning_phase = True
         super(RL_Layer, self).__init__(**kwargs)
 
