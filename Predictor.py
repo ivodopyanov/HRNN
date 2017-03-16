@@ -109,23 +109,38 @@ class Predictor(Layer):
         initial_policy_input_h = K.zeros_like(x)
         initial_depth = K.zeros((1,), dtype="int8")
 
-
-        results, _ = T.scan(self.vertical_step,
-                            outputs_info=[x, initial_action, data_mask, initial_action_calculated, initial_policy_input_x, initial_policy_input_h, initial_policy, initial_depth],
-                            non_sequences=[bucket_size, eos_mask, K.zeros((self.batch_size), dtype="int8")],
-                            n_steps=self.depth-1)
+        if self.depth > 1:
+            results, _ = T.scan(self.vertical_step,
+                                outputs_info=[x, initial_action, data_mask, initial_action_calculated, initial_policy_input_x, initial_policy_input_h, initial_policy, initial_depth],
+                                non_sequences=[bucket_size, eos_mask, K.zeros((self.batch_size), dtype="int8")],
+                                n_steps=self.depth-1)
+            x = results[0][-1]
+            initial_action = results[1][-1]
+            data_mask = results[2][-1]
+            initial_action_calculated = results[3][-1]
+            initial_policy_input_x = results[4][-1]
+            initial_policy_input_h = results[5][-1]
+            initial_policy = results[6][-1]
+            initial_depth = results[7][-1]
 
         last_layer_results, _ = T.scan(self.vertical_step,
-                            outputs_info=[results[0][-1], results[1][-1], results[2][-1], results[3][-1], results[4][-1], results[5][-1], results[6][-1], results[7][-1]],
+                            outputs_info=[x, initial_action, data_mask, initial_action_calculated, initial_policy_input_x, initial_policy_input_h, initial_policy, initial_depth],
                             non_sequences=[bucket_size, eos_mask, K.zeros((self.batch_size), dtype="int8")],
                             n_steps=1)
 
         output = last_layer_results[0][-1, -1, :, :]
-        action = K.concatenate([results[1], last_layer_results[1]], axis=0).dimshuffle([2,0,1])
-        action_calculated = K.concatenate([results[3], last_layer_results[3]], axis=0).dimshuffle([2,0,1])
-        policy_input_x = K.concatenate([results[4], last_layer_results[4]], axis=0).dimshuffle([2,0,1,3])
-        policy_input_h = K.concatenate([results[5], last_layer_results[5]], axis=0).dimshuffle([2,0,1,3])
-        policy = K.concatenate([results[6], last_layer_results[6]], axis=0).dimshuffle([2,0,1,3])
+        if self.depth > 1:
+            action = K.concatenate([results[1], last_layer_results[1]], axis=0).dimshuffle([2,0,1])
+            action_calculated = K.concatenate([results[3], last_layer_results[3]], axis=0).dimshuffle([2,0,1])
+            policy_input_x = K.concatenate([results[4], last_layer_results[4]], axis=0).dimshuffle([2,0,1,3])
+            policy_input_h = K.concatenate([results[5], last_layer_results[5]], axis=0).dimshuffle([2,0,1,3])
+            policy = K.concatenate([results[6], last_layer_results[6]], axis=0).dimshuffle([2,0,1,3])
+        else:
+            action = last_layer_results[1].dimshuffle([2,0,1])
+            action_calculated = last_layer_results[3].dimshuffle([2,0,1])
+            policy_input_x = last_layer_results[4].dimshuffle([2,0,1,3])
+            policy_input_h = last_layer_results[5].dimshuffle([2,0,1,3])
+            policy = last_layer_results[6].dimshuffle([2,0,1,3])
         depth = last_layer_results[7][-1]
 
         return [output, action, action_calculated, policy_input_x, policy_input_h, policy, depth]

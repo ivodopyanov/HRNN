@@ -60,7 +60,8 @@ def get_data(settings):
             'sentences': result,
             'word_corpus_encode': word_corpus_encode,
             'word_corpus_decode': word_corpus_decode}
-    settings, data = update_corpus_with_glove(settings, data)
+    if settings['with_embedding']:
+        settings, data = update_corpus_with_glove(settings, data)
     return data, settings
 
 
@@ -89,7 +90,7 @@ def init_settings():
     settings = {}
     settings['word_embedding_size'] = 200
     settings['sentence_embedding_size'] = 128
-    settings['depth'] = 4
+    settings['depth'] = 1
     settings['action_dim'] = 128
     settings['dropout_W'] = 0.5
     settings['dropout_U'] = 0.5
@@ -104,6 +105,7 @@ def init_settings():
     settings['epochs'] = 50
     settings['random_action_prob'] = 0
     settings['copy_etp'] = copy_weights_encoder_to_predictor_wordbased
+    settings['with_embedding'] = True
     return settings
 
 def prepare_objects(data, settings):
