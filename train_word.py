@@ -92,9 +92,10 @@ def init_settings():
     settings['sentence_embedding_size'] = 128
     settings['depth'] = 1
     settings['action_dim'] = 128
-    settings['dropout_W'] = 0.5
-    settings['dropout_U'] = 0.5
-    settings['dropout_action'] = 0.5
+    settings['dropout_W'] = 0.3
+    settings['dropout_U'] = 0.3
+    settings['dropout_action'] = 0.3
+    settings['dropout_emb'] = 0.3
     settings['hidden_dims'] = [128]
     settings['dense_dropout'] = 0.5
     settings['bucket_size_step'] = 4
@@ -105,7 +106,7 @@ def init_settings():
     settings['epochs'] = 50
     settings['random_action_prob'] = 0
     settings['copy_etp'] = copy_weights_encoder_to_predictor_wordbased
-    settings['with_embedding'] = True
+    settings['with_embedding'] = False
     return settings
 
 def prepare_objects(data, settings):
@@ -140,11 +141,13 @@ def build_encoder(data, settings):
                           name='emb',
                           mask_zero=True,
                           weights=[data['emb_matrix']],
+                          dropout=settings['dropout_emb'],
                           trainable=False)(data_input)
     else:
         embedding = Embedding(input_dim=settings['max_features']+2,
                           output_dim=settings['word_embedding_size'],
                           name='emb',
+                          dropout=settings['dropout_emb'],
                           mask_zero=True)(data_input)
 
     encoder = Encoder(input_dim=settings['word_embedding_size'],
@@ -179,11 +182,13 @@ def build_predictor(data, settings):
                           name='emb',
                           mask_zero=True,
                           weights=[data['emb_matrix']],
+                          dropout=settings['dropout_emb'],
                           trainable=False)(data_input)
     else:
         embedding = Embedding(input_dim=settings['max_features']+2,
                           output_dim=settings['word_embedding_size'],
                           name='emb',
+                          dropout=settings['dropout_emb'],
                           mask_zero=True)(data_input)
     encoder = Predictor(input_dim=settings['word_embedding_size'],
                                      hidden_dim=settings['sentence_embedding_size'],
@@ -199,9 +204,10 @@ def build_predictor(data, settings):
     layer = encoder[0]
 
     for idx, hidden_dim in enumerate(settings['hidden_dims']):
+        layer = Dropout(settings['dense_dropout'])(layer)
         layer = Dense(hidden_dim, name='dense_{}'.format(idx))(layer)
         layer = Activation('tanh')(layer)
-        layer = Dropout(settings['dense_dropout'])(layer)
+    layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
     model = Model(input=[data_input, bucket_size_input], output=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6]])
     optimizer = Adam(lr=0.001, clipnorm=5)
@@ -211,9 +217,14 @@ def build_predictor(data, settings):
 def build_RL_model(settings):
     x_input = Input(shape=(settings['sentence_embedding_size'],))
     h_tm1_input = Input(shape=(settings['sentence_embedding_size'],))
-    layer = RL_Layer(settings['sentence_embedding_size'], settings['action_dim'], dropout_action=settings['dropout_action'], name='encoder')([x_input, h_tm1_input])
+    layer = RL_Layer(hidden_dim=settings['sentence_embedding_size'],
+                     action_dim=settings['action_dim'],
+                     dropout_action=settings['dropout_action'],
+                     dropout_w=settings['dropout_W'],
+                     dropout_u=settings['dropout_U'],
+                     name='encoder')([x_input, h_tm1_input])
     model = Model(input=[x_input, h_tm1_input], output=layer)
-    optimizer = Adam(clipvalue=5)
+    optimizer = Adam(clipnorm=5)
     model.compile(loss='mse', optimizer=optimizer)
     return model
 

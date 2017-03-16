@@ -155,7 +155,12 @@ def build_predictor(data, settings):
 def build_RL_model(settings):
     x_input = Input(shape=(settings['sentence_embedding_size'],))
     h_tm1_input = Input(shape=(settings['sentence_embedding_size'],))
-    layer = RL_Layer(settings['sentence_embedding_size'], settings['action_dim'], dropout_action=settings['dropout_action'], name='encoder')([x_input, h_tm1_input])
+    layer = RL_Layer(hidden_dim=settings['sentence_embedding_size'],
+                     action_dim=settings['action_dim'],
+                     dropout_action=settings['dropout_action'],
+                     dropout_w=settings['dropout_W'],
+                     dropout_u=settings['dropout_U'],
+                     name='encoder')([x_input, h_tm1_input])
     model = Model(input=[x_input, h_tm1_input], output=layer)
     model.compile(loss='mse', optimizer='adam')
     return model
