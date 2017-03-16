@@ -39,7 +39,6 @@ class Encoder(Layer):
         self.gamma_init = initializations.get('one')
         self.beta_init = initializations.get('zero')
         self.epsilon = 1e-5
-        self.mode = 0
 
         if self.dropout_w or self.dropout_u or self.dropout_action:
             self.uses_learning_phase = True
@@ -254,6 +253,12 @@ class Encoder(Layer):
     def get_config(self):
         config = {'input_dim': self.input_dim,
                   'hidden_dim': self.hidden_dim,
+                  'action_dim': self.action_dim,
+                  'batch_size': self.batch_size,
+                  'max_len': self.max_len,
+                  'dropout_w': self.dropout_w,
+                  'dropout_u': self.dropout_u,
+                  'dropout_action': self.dropout_action,
                   'depth': self.depth,
                   'init': self.init.__name__,
                   'inner_init': self.inner_init.__name__}

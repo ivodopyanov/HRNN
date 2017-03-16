@@ -80,3 +80,14 @@ def strip_trailing_quotes(str):
         if not has_quote:
             break
     return str
+
+
+def save(objects, filename):
+    objects['encoder'].save_weights("encoder_{}.h5".format(filename))
+    objects['predictor'].save_weights("predictor_{}.h5".format(filename))
+    objects['rl_model'].save_weights("rl_model_{}.h5".format(filename))
+
+def load(objects, filename):
+    objects['encoder'].load_weights("encoder_{}.h5".format(filename))
+    objects['predictor'].load_weights("predictor_{}.h5".format(filename))
+    objects['rl_model'].load_weights("rl_model_{}.h5".format(filename))

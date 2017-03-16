@@ -52,3 +52,12 @@ class RL_Layer(Layer):
         policy = activations.relu(K.dot(x, self.W_action_1) + K.dot(h_tm1, self.U_action_1) + self.b_action_1)
         policy = K.minimum(K.exp(K.dot(policy*B_action, self.W_action_2)+self.b_action_2),1000)
         return policy
+
+    def get_config(self):
+        config = {'hidden_dim': self.hidden_dim,
+                  'action_dim': self.action_dim,
+                  'dropout_action': self.dropout_action,
+                  'init': self.init.__name__,
+                  'inner_init': self.inner_init.__name__}
+        base_config = super(RL_Layer, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))

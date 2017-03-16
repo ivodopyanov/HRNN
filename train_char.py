@@ -16,11 +16,12 @@ from Encoder import Encoder
 from Predictor import Predictor
 from RL_layer import RL_Layer
 import utils
-
+from train_utils import run_training2, copy_weights_encoder_to_predictor_charbased
 
 
 CASES_FILENAME = "cases.txt"
 QUOTES = ["'", '“', '"']
+
 
 
 def get_data(settings):
@@ -58,10 +59,11 @@ def get_data(settings):
 def init_settings():
     settings = {}
     settings['sentence_embedding_size'] = 128
-    settings['depth'] = 8
+    settings['depth'] = 4
     settings['action_dim'] = 128
-    settings['dropout_W'] = 0.2
-    settings['dropout_U'] = 0.2
+    settings['dropout_W'] = 0.5
+    settings['dropout_U'] = 0.5
+    settings['dropout_action'] = 0.5
     settings['hidden_dims'] = [64]
     settings['dense_dropout'] = 0.5
     settings['bucket_size_step'] = 4
@@ -70,6 +72,8 @@ def init_settings():
     settings['max_features']=10000
     settings['with_sentences']=False
     settings['epochs'] = 50
+    settings['random_action_prob'] = 0
+    settings['copy_etp'] = copy_weights_encoder_to_predictor_charbased
     return settings
 
 def prepare_objects(data, settings):
@@ -105,6 +109,9 @@ def build_encoder(data, settings):
                                    action_dim=settings['action_dim'],
                                    batch_size = settings['batch_size'],
                                    max_len=settings['max_len'],
+                                   dropout_u=settings['dropout_U'],
+                                   dropout_w=settings['dropout_W'],
+                                   dropout_action=settings['dropout_action'],
                                    name='encoder')([masking, bucket_size_input])
     layer = encoder
 
@@ -129,6 +136,10 @@ def build_predictor(data, settings):
                                      action_dim=settings['action_dim'],
                                      batch_size=settings['batch_size'],
                                      max_len=settings['max_len'],
+                                     random_action_prob=settings['random_action_prob'],
+                                     dropout_u=settings['dropout_U'],
+                                     dropout_w=settings['dropout_W'],
+                                     dropout_action=settings['dropout_action'],
                                      name='encoder')([masking, bucket_size_input])
     layer = encoder[0]
 
@@ -137,14 +148,14 @@ def build_predictor(data, settings):
         layer = Activation('tanh')(layer)
         layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(input=[data_input, bucket_size_input], output=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5]])
+    model = Model(input=[data_input, bucket_size_input], output=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6]])
     optimizer = Adam(lr=0.001, clipnorm=5)
     return model
 
 def build_RL_model(settings):
     x_input = Input(shape=(settings['sentence_embedding_size'],))
     h_tm1_input = Input(shape=(settings['sentence_embedding_size'],))
-    layer = RL_Layer(settings['sentence_embedding_size'], settings['action_dim'], name='encoder')([x_input, h_tm1_input])
+    layer = RL_Layer(settings['sentence_embedding_size'], settings['action_dim'], dropout_action=settings['dropout_action'], name='encoder')([x_input, h_tm1_input])
     model = Model(input=[x_input, h_tm1_input], output=layer)
     model.compile(loss='mse', optimizer='adam')
     return model
@@ -199,130 +210,7 @@ def build_batch(data, settings, sentence_batch):
         Y[i][data['labels'].index(sentence_tuple[1])] = True
     return X, Y
 
-def run_training(data, objects):
-    objects['model'].fit_generator(generator=objects['data_gen'], validation_data=objects['val_gen'], nb_val_samples=len(objects['val_indexes'])/10, samples_per_epoch=len(objects['train_indexes'])/10, nb_epoch=50, callbacks=[LearningRateScheduler(lr_scheduler)])
-
-def lr_scheduler(epoch):
-    z = epoch/50
-    return z*0.0001 + (1-z)*0.001
-
-
-
-
 ###############################################################
-
-
-def run_training(data, objects, settings):
-    encoder = objects['encoder']
-    predictor = objects['predictor']
-    rl_model = objects['rl_model']
-    epoch_size = int(len(objects['train_indexes'])/(10*settings['batch_size']))
-    val_epoch_size = int(len(objects['val_indexes'])/(10*settings['batch_size']))
-
-    for epoch in range(settings['epochs']):
-        sys.stdout.write("\nEpoch {}\n".format(epoch))
-        loss1_total = []
-        acc_total = []
-        loss2_total = []
-        for i in range(epoch_size):
-            batch = next(objects['data_gen'])
-            loss1 = encoder.train_on_batch(batch[0], batch[1])
-
-            predictor.get_layer('encoder').W_emb.set_value(K.get_value(encoder.get_layer('encoder').W_emb))
-            predictor.get_layer('encoder').b_emb.set_value(K.get_value(encoder.get_layer('encoder').b_emb))
-            predictor.get_layer('encoder').W.set_value(K.get_value(encoder.get_layer('encoder').W))
-            predictor.get_layer('encoder').U.set_value(K.get_value(encoder.get_layer('encoder').U))
-            predictor.get_layer('encoder').b.set_value(K.get_value(encoder.get_layer('encoder').b))
-            predictor.get_layer('dense_0').W.set_value(K.get_value(encoder.get_layer('dense_0').W))
-            predictor.get_layer('dense_0').b.set_value(K.get_value(encoder.get_layer('dense_0').b))
-            predictor.get_layer('output').W.set_value(K.get_value(encoder.get_layer('output').W))
-            predictor.get_layer('output').b.set_value(K.get_value(encoder.get_layer('output').b))
-
-            y_pred = predictor.predict_on_batch(batch[0])
-
-            output = y_pred[0]
-            action = y_pred[1]
-            action_calculated = y_pred[2]
-            x = y_pred[3]
-            h = y_pred[4]
-            policy = y_pred[5]
-
-            error = np.log(np.sum(output*batch[1], axis=1))
-            X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
-            loss2 = rl_model.train_on_batch(X,Y)
-
-
-            encoder.get_layer('encoder').W_action_1.set_value(K.get_value(rl_model.get_layer('encoder').W_action_1))
-            encoder.get_layer('encoder').U_action_1.set_value(K.get_value(rl_model.get_layer('encoder').U_action_1))
-            encoder.get_layer('encoder').b_action_1.set_value(K.get_value(rl_model.get_layer('encoder').b_action_1))
-            encoder.get_layer('encoder').W_action_2.set_value(K.get_value(rl_model.get_layer('encoder').W_action_2))
-            encoder.get_layer('encoder').b_action_2.set_value(K.get_value(rl_model.get_layer('encoder').b_action_2))
-
-            predictor.get_layer('encoder').W_action_1.set_value(K.get_value(rl_model.get_layer('encoder').W_action_1))
-            predictor.get_layer('encoder').U_action_1.set_value(K.get_value(rl_model.get_layer('encoder').U_action_1))
-            predictor.get_layer('encoder').b_action_1.set_value(K.get_value(rl_model.get_layer('encoder').b_action_1))
-            predictor.get_layer('encoder').W_action_2.set_value(K.get_value(rl_model.get_layer('encoder').W_action_2))
-            predictor.get_layer('encoder').b_action_2.set_value(K.get_value(rl_model.get_layer('encoder').b_action_2))
-
-            loss1_total.append(loss1[0])
-            loss2_total.append(loss2)
-            acc_total.append(loss1[1])
-
-            sys.stdout.write("\r batch {} / {}: loss1 = {:.2f}, acc = {:.2f}, loss2 = {:.6f}"
-                             .format(i,
-                                     epoch_size,
-                                     np.sum(loss1_total)/len(loss1_total),
-                                     np.sum(acc_total)/len(acc_total),
-                                     np.sum(loss2_total)/len(loss2_total)))
-        sys.stdout.write("\n")
-        loss1_total = []
-        acc_total = []
-        for i in range(val_epoch_size):
-            batch = next(objects['val_gen'])
-            loss1 = encoder.train_on_batch(batch[0], batch[1])
-            loss1_total.append(loss1[0])
-            acc_total.append(loss1[1])
-            sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.2f}, acc = {:.2f}"
-                             .format(i+1, val_epoch_size,
-                                     np.sum(loss1_total)/len(loss1_total),
-                                     np.sum(acc_total)/len(acc_total)))
-
-
-
-
-def restore_exp(settings, x, total_error, h, policy, fk_calculated):
-    error_mult = np.repeat(np.expand_dims(total_error, axis=1), fk_calculated.shape[1], axis=1)
-    error_mult = np.repeat(np.expand_dims(error_mult, axis=2), fk_calculated.shape[2], axis=2)
-
-    chosen_action = np.greater_equal(policy[:,:,:,0], policy[:,:,:,1])
-    shift_action_mask = np.ones_like(error_mult)*chosen_action
-    reduce_action_mask = np.ones_like(error_mult)*(1-chosen_action)
-
-    shift_action_policy = np.concatenate((np.expand_dims(shift_action_mask*error_mult, axis=3), np.expand_dims(policy[:,:,:,1], axis=3)), axis=3)
-    shift_action_policy = np.repeat(np.expand_dims(shift_action_mask, axis=3), 2, axis=3)*shift_action_policy
-
-    reduce_action_policy = np.concatenate((np.expand_dims(policy[:,:,:,0], axis=3), np.expand_dims(reduce_action_mask*error_mult, axis=3)), axis=3)
-    reduce_action_policy = np.repeat(np.expand_dims(reduce_action_mask, axis=3), 2, axis=3)*reduce_action_policy
-
-    new_policy = shift_action_policy + reduce_action_policy
-
-    decision_performed = np.where(fk_calculated == 1)
-    x_value_input = x[decision_performed]
-    h_value_input = h[decision_performed]
-    policy_output = new_policy[decision_performed]
-
-
-    return [x_value_input, h_value_input], policy_output
-
-
-def save(objects, filename):
-    objects['encoder'].save_weights("encoder_{}.h5".format(filename))
-    objects['predictor'].save_weights("predictor_{}.h5".format(filename))
-    objects['rl_model'].save_weights("rl_model_{}.h5".format(filename))
-
-
-
-
 
 def train(filename):
     settings = init_settings()
@@ -332,8 +220,7 @@ def train(filename):
     #objects['model'].load_weights("rl.h5")
     sys.stdout.write('Compiling model\n')
     #run_training(data, objects)
-    run_training(data, objects, settings)
-    save(objects, filename)
+    run_training2(data, objects, settings)
 
 
 if __name__=="__main__":
