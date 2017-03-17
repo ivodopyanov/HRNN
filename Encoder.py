@@ -1,5 +1,5 @@
 import keras.backend as K
-from keras.layers import initializations, activations
+from keras.layers import initializations, activations, regularizers
 from keras.engine import Layer
 
 import numpy as np
@@ -11,7 +11,7 @@ from theano.printing import Print
 
 class Encoder(Layer):
     def __init__(self, input_dim, hidden_dim, action_dim, depth, batch_size, max_len,
-                 dropout_w, dropout_u, dropout_action,
+                 dropout_w, dropout_u, dropout_action, l2,
                  init='glorot_uniform', inner_init='orthogonal', **kwargs):
         '''
         Layer also uses
@@ -39,6 +39,7 @@ class Encoder(Layer):
         self.gamma_init = initializations.get('one')
         self.beta_init = initializations.get('zero')
         self.epsilon = 1e-5
+        self.l2 = l2
 
         if self.dropout_w or self.dropout_u or self.dropout_action:
             self.uses_learning_phase = True
@@ -66,6 +67,12 @@ class Encoder(Layer):
         self.gammas = K.ones((2, 3*self.hidden_dim,), name="gammas")
         self.betas = K.zeros((2, 3*self.hidden_dim,), name="betas")
         self.trainable_weights = [self.W_emb, self.b_emb, self.W ,self.U , self.b, self.gammas, self.betas]
+        if self.l2 is not None:
+            for weight in self.trainable_weights:
+                reg = regularizers.l2(self.l2)
+                reg.set_param(weight)
+                self.regularizers.append(reg)
+
         self.built = True
 
     def compute_mask(self, input, input_mask=None):

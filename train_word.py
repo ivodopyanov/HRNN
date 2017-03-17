@@ -6,6 +6,7 @@ import random
 from math import ceil, floor
 
 
+from keras import regularizers
 from keras.models import Model
 from keras.layers import Dense, Dropout, Input, Masking, Activation, Embedding
 from keras.optimizers import Adam
@@ -107,6 +108,7 @@ def init_settings():
     settings['random_action_prob'] = 0
     settings['copy_etp'] = copy_weights_encoder_to_predictor_wordbased
     settings['with_embedding'] = False
+    settings['l2'] = 0.01
     return settings
 
 def prepare_objects(data, settings):
@@ -159,6 +161,7 @@ def build_encoder(data, settings):
                                    dropout_u=settings['dropout_U'],
                                    dropout_w=settings['dropout_W'],
                                    dropout_action=settings['dropout_action'],
+                                   l2=settings['l2'],
                                    name='encoder')([embedding, bucket_size_input])
     layer = encoder
 
@@ -222,6 +225,7 @@ def build_RL_model(settings):
                      dropout_action=settings['dropout_action'],
                      dropout_w=settings['dropout_W'],
                      dropout_u=settings['dropout_U'],
+                     l2=settings['l2'],
                      name='encoder')([x_input, h_tm1_input])
     model = Model(input=[x_input, h_tm1_input], output=layer)
     optimizer = Adam(clipnorm=5)

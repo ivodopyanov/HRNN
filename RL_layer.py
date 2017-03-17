@@ -1,12 +1,12 @@
 import keras.backend as K
-from keras.layers import initializations, activations
+from keras.layers import initializations, activations, regularizers
 from keras.engine import Layer
 
 import theano.tensor as TS
 
 class RL_Layer(Layer):
     def __init__(self,hidden_dim, action_dim,
-                 dropout_w, dropout_u, dropout_action,
+                 dropout_w, dropout_u, dropout_action, l2,
                  init='glorot_uniform', inner_init='orthogonal',
                  activation='tanh', inner_activation='hard_sigmoid',
                  **kwargs):
@@ -19,6 +19,7 @@ class RL_Layer(Layer):
         self.inner_init = initializations.get(inner_init)
         self.activation = activations.get(activation)
         self.inner_activation = activations.get(inner_activation)
+        self.l2 = l2
         if self.dropout_w or self.dropout_u or self.dropout_action:
             self.uses_learning_phase = True
         super(RL_Layer, self).__init__(**kwargs)
@@ -33,6 +34,11 @@ class RL_Layer(Layer):
         self.b_action_2 = K.variable([1, -1], name='{}_b_action_2'.format(self.name))
 
         self.trainable_weights = [self.W_action_1, self.U_action_1, self.b_action_1, self.W_action_2, self.b_action_2]
+        if self.l2 is not None:
+            for weight in self.trainable_weights:
+                reg = regularizers.l2(self.l2)
+                reg.set_param(weight)
+                self.regularizers.append(reg)
 
         self.built = True
 
