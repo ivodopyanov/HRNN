@@ -166,9 +166,10 @@ def build_encoder(data, settings):
     layer = encoder
 
     for idx, hidden_dim in enumerate(settings['hidden_dims']):
+        layer = Dropout(settings['dense_dropout'])(layer)
         layer = Dense(hidden_dim, name='dense_{}'.format(idx))(layer)
         layer = Activation('tanh')(layer)
-        layer = Dropout(settings['dense_dropout'])(layer)
+    layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
     model = Model(input=[data_input, bucket_size_input], output=output)
     optimizer = Adam(lr=0.001, clipnorm=5)
