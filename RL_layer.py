@@ -1,24 +1,20 @@
+# -*- coding: utf-8 -*-
 import keras.backend as K
-from keras.layers import initializations, activations, regularizers
+from keras import activations
 from keras.engine import Layer
 
 import theano.tensor as TS
+from keras.initializers import glorot_uniform, orthogonal, zeros
+from keras.regularizers import l2
 
 class RL_Layer(Layer):
     def __init__(self,hidden_dim, action_dim,
-                 dropout_w, dropout_u, dropout_action, l2,
-                 init='glorot_uniform', inner_init='orthogonal',
-                 activation='tanh', inner_activation='hard_sigmoid',
-                 **kwargs):
+                 dropout_w, dropout_u, dropout_action, l2, **kwargs):
         self.hidden_dim = hidden_dim
         self.action_dim = action_dim
         self.dropout_w = dropout_w
         self.dropout_u = dropout_u
         self.dropout_action = dropout_action
-        self.init = initializations.get(init)
-        self.inner_init = initializations.get(inner_init)
-        self.activation = activations.get(activation)
-        self.inner_activation = activations.get(inner_activation)
         self.l2 = l2
         if self.dropout_w or self.dropout_u or self.dropout_action:
             self.uses_learning_phase = True
@@ -26,26 +22,35 @@ class RL_Layer(Layer):
 
 
     def build(self, input_shape):
-        self.W_action_1 = self.init((self.hidden_dim, self.action_dim), name='{}_W_action_1'.format(self.name))
-        self.U_action_1 = self.inner_init((self.hidden_dim, self.action_dim), name='{}_U_action_1'.format(self.name))
-        self.b_action_1 = K.zeros((self.action_dim,), name='{}_b_action_1'.format(self.name))
+        self.W_action_1 = self.add_weight((self.hidden_dim, self.action_dim),
+                                          initializer=glorot_uniform(),
+                                          regularizer=l2(self.l2),
+                                          trainable=False,
+                                          name='W_action_1_{}'.format(self.name))
+        self.U_action_1 = self.add_weight((self.hidden_dim, self.action_dim),
+                                          initializer=orthogonal(),
+                                          trainable=False,
+                                          name='U_action_1_{}'.format(self.name))
+        self.b_action_1 = self.add_weight((self.action_dim,),
+                                          initializer=zeros(),
+                                          trainable=False,
+                                          name='b_action_2_{}'.format(self.name))
 
-        self.W_action_2 = K.zeros((self.action_dim,2), name='{}_W_action_2'.format(self.name))
-        self.b_action_2 = K.variable([1, -1], name='{}_b_action_2'.format(self.name))
-
-        self.trainable_weights = [self.W_action_1, self.U_action_1, self.b_action_1, self.W_action_2, self.b_action_2]
-        if self.l2 is not None:
-            for weight in self.trainable_weights:
-                reg = regularizers.l2(self.l2)
-                reg.set_param(weight)
-                self.regularizers.append(reg)
+        self.W_action_2 = self.add_weight((self.hidden_dim, self.action_dim),
+                                          initializer=glorot_uniform(),
+                                          trainable=False,
+                                          name='W_action_2_{}'.format(self.name))
+        self.b_action_2 = self.add_weight((self.action_dim,),
+                                          initializer=zeros(),
+                                          trainable=False,
+                                          name='b_action_2_{}'.format(self.name))
 
         self.built = True
 
     def compute_mask(self, input, input_mask=None):
         return None
 
-    def get_output_shape_for(self, input_shape):
+    def compute_output_shape(self, input_shape):
         return (input_shape[0][0], 2)
 
     def call(self, input, mask=None):
@@ -77,8 +82,6 @@ class RL_Layer(Layer):
                   'action_dim': self.action_dim,
                   'dropout_action': self.dropout_action,
                   'dropout_w': self.dropout_w,
-                  'dropout_u': self.dropout_u,
-                  'init': self.init.__name__,
-                  'inner_init': self.inner_init.__name__}
+                  'dropout_u': self.dropout_u}
         base_config = super(RL_Layer, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))

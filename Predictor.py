@@ -1,7 +1,10 @@
+# -*- coding: utf-8 -*-
 import keras.backend as K
-from keras.layers import initializations, activations
+from keras import activations
 from keras.engine import Layer
 
+from keras.initializers import glorot_uniform, orthogonal, zeros
+from keras.regularizers import l2
 import theano as T
 import theano.tensor as TS
 from theano.printing import Print
@@ -10,8 +13,7 @@ from theano.tensor.shared_randomstreams import RandomStreams
 
 class Predictor(Layer):
     def __init__(self, input_dim, hidden_dim, action_dim, depth, batch_size, max_len, random_action_prob,
-                 dropout_w, dropout_u, dropout_action,
-                 init='glorot_uniform', inner_init='orthogonal', **kwargs):
+                 dropout_w, dropout_u, dropout_action, **kwargs):
         '''
         Layer also uses
         * Layer Normalization
@@ -33,11 +35,7 @@ class Predictor(Layer):
         self.dropout_w = dropout_w
         self.dropout_u = dropout_u
         self.dropout_action = dropout_action
-        self.init = initializations.get(init)
-        self.inner_init = initializations.get(inner_init)
         self.supports_masking = True
-        self.gamma_init = initializations.get('one')
-        self.beta_init = initializations.get('zero')
         self.epsilon = 1e-5
         if self.dropout_w or self.dropout_u or self.dropout_action:
             self.uses_learning_phase = True
@@ -46,31 +44,66 @@ class Predictor(Layer):
 
 
     def build(self, input_shape):
-        self.W_emb = self.init((self.input_dim, self.hidden_dim), name='{}_W_emb'.format(self.name))
-        self.b_emb = K.zeros((self.hidden_dim), name='{}_b_emb'.format(self.name))
+        self.W_emb = self.add_weight((self.input_dim, self.hidden_dim),
+                                     initializer=glorot_uniform(),
+                                     trainable=False,
+                                     name='W_emb_{}'.format(self.name))
+        self.b_emb = self.add_weight((self.hidden_dim),
+                                     initializer=zeros(),
+                                     trainable=False,
+                                     name='b_emb_{}'.format(self.name))
 
-        self.W = self.init((self.hidden_dim, 3*self.hidden_dim), name='{}_W'.format(self.name))
-        self.U = self.inner_init((self.hidden_dim, 3*self.hidden_dim), name='{}_U'.format(self.name))
-        self.b = K.zeros((3*self.hidden_dim), name='{}_b'.format(self.name))
+        self.W = self.add_weight((self.hidden_dim, 3*self.hidden_dim),
+                                 initializer=glorot_uniform(),
+                                 trainable=False,
+                                 name='W_{}'.format(self.name))
+        self.U = self.add_weight((self.hidden_dim, 3*self.hidden_dim),
+                                 initializer=orthogonal(),
+                                 trainable=False,
+                                 name='U_{}'.format(self.name))
+        self.b = self.add_weight((3*self.hidden_dim),
+                                 initializer=zeros(),
+                                 trainable=False,
+                                 name='b_{}'.format(self.name))
 
 
-        self.W_action_1 = self.init((self.hidden_dim, self.action_dim), name='{}_W_action_1'.format(self.name))
-        self.U_action_1 = self.inner_init((self.hidden_dim, self.action_dim), name='{}_U_action_1'.format(self.name))
-        self.b_action_1 = K.zeros((self.action_dim,), name='{}_b_action_1'.format(self.name))
+        self.W_action_1 = self.add_weight((self.hidden_dim, self.action_dim),
+                                          initializer=glorot_uniform(),
+                                          trainable=False,
+                                          name='W_action_1_{}'.format(self.name))
+        self.U_action_1 = self.add_weight((self.hidden_dim, self.action_dim),
+                                          initializer=orthogonal(),
+                                          trainable=False,
+                                          name='U_action_1_{}'.format(self.name))
+        self.b_action_1 = self.add_weight((self.action_dim,),
+                                          initializer=zeros(),
+                                          trainable=False,
+                                          name='b_action_2_{}'.format(self.name))
 
-        self.W_action_2 = K.zeros((self.action_dim,2), name='{}_W_action_2'.format(self.name))
-        self.b_action_2 = K.variable([1, -1], name='{}_b_action_2'.format(self.name))
+        self.W_action_2 = self.add_weight((self.hidden_dim, self.action_dim),
+                                          initializer=glorot_uniform(),
+                                          trainable=False,
+                                          name='W_action_2_{}'.format(self.name))
+        self.b_action_2 = self.add_weight((self.action_dim,),
+                                          initializer=zeros(),
+                                          trainable=False,
+                                          name='b_action_2_{}'.format(self.name))
 
+        self.gammas = self.add_weight((2, 3*self.hidden_dim,),
+                                      initializer=zeros(),
+                                      trainable=False,
+                                      name='gammas_{}'.format(self.name))
+        self.betas = self.add_weight((2, 3*self.hidden_dim,),
+                                     initializer=zeros(),
+                                     trainable=False,
+                                     name='betas_{}'.format(self.name))
 
-        self.gammas = K.ones((2, 3*self.hidden_dim), name="gammas")
-        self.betas = K.zeros((2, 3*self.hidden_dim), name="betas")
-        self.trainable_weights = []
         self.built = True
 
     def compute_mask(self, input, input_mask=None):
         return [None, None, None, None, None, None, None]
 
-    def get_output_shape_for(self, input_shape):
+    def compute_output_shape(self, input_shape):
         return [(input_shape[0][0], self.hidden_dim),
                 (self.batch_size, self.depth, 1, 1),
                 (self.batch_size, self.depth, 1, 1),

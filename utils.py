@@ -1,5 +1,7 @@
+# -*- coding: utf-8 -*-
 import sys
 import os
+from io import open
 from collections import Counter
 
 from nltk.tokenize import word_tokenize
@@ -13,8 +15,8 @@ CHAR_COUNTS_FILENAME = "char_counts.txt"
 WORD_CORPUS_FILENAME = "words.txt"
 WORD_COUNTS_FILENAME = "word_counts.txt"
 INDEXES_FILENAME = "indexes.txt"
-EOS_WORD = "!@#EOS#@!"
-QUOTES = ["'", '“', '"']
+EOS_WORD = u"!@#EOS#@!"
+QUOTES = [u"'", u'“', u'"']
 
 
 def load_char_corpus(freq_limit):

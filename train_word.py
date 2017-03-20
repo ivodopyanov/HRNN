@@ -1,14 +1,16 @@
+# -*- coding: utf-8 -*-
 import os
 import numpy as np
 import sys
 import csv
 import random
 from math import ceil, floor
+from io import open
 
 
 from keras import regularizers
 from keras.models import Model
-from keras.layers import Dense, Dropout, Input, Masking, Activation, Embedding
+from keras.layers import Dense, Dropout, Input, Masking, Activation, Embedding, SpatialDropout1D
 from keras.optimizers import Adam
 from keras.callbacks import LearningRateScheduler
 import keras.backend as K
@@ -29,9 +31,9 @@ GLOVE_FILE = "glove.6B.200d.txt"
 
 
 def get_data(settings):
-    with open(utils.SPLITTED_SENTENCES_FILENAME, "rt") as f:
+    with open(utils.SPLITTED_SENTENCES_FILENAME, "rt", encoding="utf8") as f:
         sentences = f.read().split(utils.EOS_WORD)
-    with open(utils.LABELS_FILENAME, "rt") as f:
+    with open(utils.LABELS_FILENAME, "rt", encoding="utf8") as f:
         labels = f.read().splitlines()
 
     sentences = sentences[:-1]
@@ -68,7 +70,7 @@ def get_data(settings):
 
 def load_glove_embeddings(data):
     result = {}
-    with open(GLOVE_FILE) as f:
+    with open(GLOVE_FILE, encoding="utf8") as f:
         for line in f:
             values = line.split()
             word = values[0]
@@ -112,7 +114,7 @@ def init_settings():
     return settings
 
 def prepare_objects(data, settings):
-    with open(utils.INDEXES_FILENAME, "rt") as f:
+    with open(utils.INDEXES_FILENAME, "rt", encoding="utf8") as f:
         indexes = f.read().splitlines()
     indexes = [int(index) for index in indexes]
     train_segment = int(len(indexes)*0.9)
@@ -143,14 +145,14 @@ def build_encoder(data, settings):
                           name='emb',
                           mask_zero=True,
                           weights=[data['emb_matrix']],
-                          dropout=settings['dropout_emb'],
                           trainable=False)(data_input)
     else:
         embedding = Embedding(input_dim=settings['max_features']+2,
                           output_dim=settings['word_embedding_size'],
                           name='emb',
-                          dropout=settings['dropout_emb'],
                           mask_zero=True)(data_input)
+    if settings['dropout_emb'] > 0:
+        embedding = SpatialDropout1D(settings['dropout_emb'])(embedding)
 
     encoder = Encoder(input_dim=settings['word_embedding_size'],
                                    hidden_dim=settings['sentence_embedding_size'],
@@ -171,7 +173,7 @@ def build_encoder(data, settings):
         layer = Activation('tanh')(layer)
     layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(input=[data_input, bucket_size_input], output=output)
+    model = Model(inputs=[data_input, bucket_size_input], outputs=[output])
     optimizer = Adam(lr=0.001, clipnorm=5)
     model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=['accuracy'])
     return model
@@ -186,14 +188,14 @@ def build_predictor(data, settings):
                           name='emb',
                           mask_zero=True,
                           weights=[data['emb_matrix']],
-                          dropout=settings['dropout_emb'],
                           trainable=False)(data_input)
     else:
         embedding = Embedding(input_dim=settings['max_features']+2,
                           output_dim=settings['word_embedding_size'],
                           name='emb',
-                          dropout=settings['dropout_emb'],
                           mask_zero=True)(data_input)
+    if settings['dropout_emb'] > 0:
+        embedding = SpatialDropout1D(settings['dropout_emb'])(embedding)
     encoder = Predictor(input_dim=settings['word_embedding_size'],
                                      hidden_dim=settings['sentence_embedding_size'],
                                      depth=settings['depth'],
@@ -213,7 +215,7 @@ def build_predictor(data, settings):
         layer = Activation('tanh')(layer)
     layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(input=[data_input, bucket_size_input], output=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6]])
+    model = Model(inputs=[data_input, bucket_size_input], outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6]])
     optimizer = Adam(lr=0.001, clipnorm=5)
     #model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=['accuracy'])
     return model
@@ -228,7 +230,7 @@ def build_RL_model(settings):
                      dropout_u=settings['dropout_U'],
                      l2=settings['l2'],
                      name='encoder')([x_input, h_tm1_input])
-    model = Model(input=[x_input, h_tm1_input], output=layer)
+    model = Model(inputs=[x_input, h_tm1_input], outputs=[layer])
     optimizer = Adam(clipnorm=5)
     model.compile(loss='mse', optimizer=optimizer)
     return model

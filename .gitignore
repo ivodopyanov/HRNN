@@ -5,3 +5,4 @@ stanfordSentimentTreebank/
 *.txt
 *.h5
 yelp_academic_dataset_review.json
+*.pyc

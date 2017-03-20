@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import nltk.data
 from nltk.tokenize import word_tokenize
