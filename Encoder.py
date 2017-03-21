@@ -82,11 +82,11 @@ class Encoder(Layer):
                                           trainable=False,
                                           name='b_action_2_{}'.format(self.name))
 
-        self.W_action_2 = self.add_weight((self.hidden_dim, self.action_dim),
+        self.W_action_2 = self.add_weight((self.action_dim, 2),
                                           initializer=glorot_uniform(),
                                           trainable=False,
                                           name='W_action_2_{}'.format(self.name))
-        self.b_action_2 = self.add_weight((self.action_dim,),
+        self.b_action_2 = self.add_weight((2,),
                                           initializer=zeros(),
                                           trainable=False,
                                           name='b_action_2_{}'.format(self.name))
@@ -112,6 +112,7 @@ class Encoder(Layer):
         # Keras doesn't allow 1D model inputs - so that tensor have shape (1,1) instead of scalar or (1,)
         bucket_size = input[1][0][0]
 
+
         data_mask = mask[0]
         if data_mask.ndim == x.ndim-1:
             data_mask = K.expand_dims(data_mask)
@@ -125,8 +126,10 @@ class Encoder(Layer):
 
         initial_action = TS.zeros_like(x[:,:,0], dtype="int8")
 
+
         first_mask = K.zeros_like(data_mask[0])
         first_mask = K.expand_dims(first_mask, 0)
+
         eos_mask = K.concatenate([data_mask[1:], first_mask], axis=0)
         eos_mask = TS.cast(data_mask*(1-eos_mask), "int8")
 

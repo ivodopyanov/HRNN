@@ -91,15 +91,15 @@ def update_corpus_with_glove(settings, data):
 
 def init_settings():
     settings = {}
-    settings['word_embedding_size'] = 200
-    settings['sentence_embedding_size'] = 128
-    settings['depth'] = 1
-    settings['action_dim'] = 128
-    settings['dropout_W'] = 0.3
-    settings['dropout_U'] = 0.3
-    settings['dropout_action'] = 0.3
-    settings['dropout_emb'] = 0.3
-    settings['hidden_dims'] = [128]
+    settings['word_embedding_size'] = 32
+    settings['sentence_embedding_size'] = 32
+    settings['depth'] = 5
+    settings['action_dim'] = 32
+    settings['dropout_W'] = 0.1
+    settings['dropout_U'] = 0.1
+    settings['dropout_action'] = 0.1
+    settings['dropout_emb'] = 0.1
+    settings['hidden_dims'] = [32]
     settings['dense_dropout'] = 0.5
     settings['bucket_size_step'] = 4
     settings['batch_size'] = 6
@@ -110,7 +110,7 @@ def init_settings():
     settings['random_action_prob'] = 0
     settings['copy_etp'] = copy_weights_encoder_to_predictor_wordbased
     settings['with_embedding'] = False
-    settings['l2'] = 0.01
+    settings['l2'] = 0.00001
     return settings
 
 def prepare_objects(data, settings):
@@ -251,7 +251,7 @@ def build_generator_HRNN(data, settings, indexes):
                 np.random.shuffle(walk_order)
             if len(sentence) > settings['max_len']:
                 continue
-            bucket_size = ceil((len(sentence)+1) / settings['bucket_size_step'])*settings['bucket_size_step']
+            bucket_size = ceil((len(sentence)+1.0) / settings['bucket_size_step'])*settings['bucket_size_step']
             if bucket_size not in buckets:
                 buckets[bucket_size] = []
             buckets[bucket_size].append((sentence, label))

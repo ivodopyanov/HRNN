@@ -7,7 +7,7 @@ import keras.backend as K
 def copy_weights_encoder_to_predictor_wordbased(objects):
     encoder = objects['encoder']
     predictor = objects['predictor']
-    predictor.get_layer('emb').W.set_value(K.get_value(encoder.get_layer('emb').W))
+    predictor.get_layer('emb').embeddings.set_value(K.get_value(encoder.get_layer('emb').embeddings))
     copy_weights_encoder_to_predictor_charbased(objects)
 
 def copy_weights_encoder_to_predictor_charbased(objects):
@@ -20,10 +20,10 @@ def copy_weights_encoder_to_predictor_charbased(objects):
     predictor.get_layer('encoder').b.set_value(K.get_value(encoder.get_layer('encoder').b))
     predictor.get_layer('encoder').gammas.set_value(K.get_value(encoder.get_layer('encoder').gammas))
     predictor.get_layer('encoder').betas.set_value(K.get_value(encoder.get_layer('encoder').betas))
-    predictor.get_layer('dense_0').W.set_value(K.get_value(encoder.get_layer('dense_0').W))
-    predictor.get_layer('dense_0').b.set_value(K.get_value(encoder.get_layer('dense_0').b))
-    predictor.get_layer('output').W.set_value(K.get_value(encoder.get_layer('output').W))
-    predictor.get_layer('output').b.set_value(K.get_value(encoder.get_layer('output').b))
+    predictor.get_layer('dense_0').kernel.set_value(K.get_value(encoder.get_layer('dense_0').kernel))
+    predictor.get_layer('dense_0').bias.set_value(K.get_value(encoder.get_layer('dense_0').bias))
+    predictor.get_layer('output').kernel.set_value(K.get_value(encoder.get_layer('output').kernel))
+    predictor.get_layer('output').bias.set_value(K.get_value(encoder.get_layer('output').bias))
 
 
 def copy_weights_rl_to_predictor(objects):

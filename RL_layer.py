@@ -36,11 +36,11 @@ class RL_Layer(Layer):
                                           trainable=False,
                                           name='b_action_2_{}'.format(self.name))
 
-        self.W_action_2 = self.add_weight((self.hidden_dim, self.action_dim),
+        self.W_action_2 = self.add_weight((self.action_dim, 2),
                                           initializer=glorot_uniform(),
                                           trainable=False,
                                           name='W_action_2_{}'.format(self.name))
-        self.b_action_2 = self.add_weight((self.action_dim,),
+        self.b_action_2 = self.add_weight((2,),
                                           initializer=zeros(),
                                           trainable=False,
                                           name='b_action_2_{}'.format(self.name))
