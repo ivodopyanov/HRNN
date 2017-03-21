@@ -140,7 +140,7 @@ class Predictor(Layer):
         initial_policy = TS.extra_ops.repeat(initial_policy, 2, axis=2)
         initial_policy_input_x = K.zeros_like(x)
         initial_policy_input_h = K.zeros_like(x)
-        initial_depth = K.zeros((1,), dtype="bool")
+        initial_depth = K.zeros((1,), dtype="int8")
 
         if self.depth > 1:
             results, _ = T.scan(self.vertical_step,
@@ -227,7 +227,7 @@ class Predictor(Layer):
         policy_input_x = x
         policy_input_h = K.concatenate([K.zeros((1, self.batch_size, self.hidden_dim)), h[1:]], axis=0)
 
-        new_depth = TS.cast(depth_prev+1, dtype="bool")
+        new_depth = TS.cast(depth_prev+1, dtype="int8")
 
         return [h, shifted_action, new_data_mask, action_calculated, policy_input_x, policy_input_h, policy, new_depth], T.scan_module.until(TS.eq(TS.sum(both_output), 0))
 

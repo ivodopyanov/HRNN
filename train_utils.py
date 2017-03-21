@@ -80,11 +80,11 @@ def run_training(data, objects, settings):
                 if len(loss2_total) == 0:
                     avg_loss2 = 0
                 else:
-                    avg_loss2 = np.sum(loss2_total)/len(loss2_total)
+                    avg_loss2 = np.sum(loss2_total)*1.0/len(loss2_total)
                 if len(depth_total) == 0:
                     avg_depth = 0
                 else:
-                    avg_depth = np.sum(depth_total)/len(depth_total)
+                    avg_depth = np.sum(depth_total)*1.0/len(depth_total)
 
             if settings['mode'] == 0:
                 sys.stdout.write("\r batch {} / {}: loss1 = {:.4f}, acc = {:.4f}"
@@ -120,19 +120,19 @@ def run_training(data, objects, settings):
                 if len(loss1_total) == 0:
                     avg_loss1 = 0
                 else:
-                    avg_loss1 = np.sum(loss1_total)/len(loss1_total)
+                    avg_loss1 = np.sum(loss1_total)*1.0/len(loss1_total)
                 if len(acc_total) == 0:
                     avg_acc = 0
                 else:
-                    avg_acc = np.sum(acc_total)/len(acc_total)
+                    avg_acc = np.sum(acc_total)*1.0/len(acc_total)
                 if len(loss2_total) == 0:
                     avg_loss2 = 0
                 else:
-                    avg_loss2 = np.sum(loss2_total)/len(loss2_total)
+                    avg_loss2 = np.sum(loss2_total)*1.0/len(loss2_total)
                 if len(depth_total) == 0:
                     avg_depth = 0
                 else:
-                    avg_depth = np.sum(depth_total)/len(depth_total)
+                    avg_depth = np.sum(depth_total)*1.0/len(depth_total)
 
                 sys.stdout.write("\r batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
                              .format(j+1, epoch_size,
@@ -167,10 +167,10 @@ def run_training(data, objects, settings):
             acc_total.append(loss1[1])
             sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
                              .format(i+1, val_epoch_size,
-                                     np.sum(loss1_total)/len(loss1_total),
-                                     np.sum(acc_total)/len(acc_total),
-                                     np.sum(loss2_total)/len(loss2_total),
-                                     np.sum(depth_total)/len(depth_total)))
+                                     np.sum(loss1_total)*1.0/len(loss1_total),
+                                     np.sum(acc_total)*1.0/len(acc_total),
+                                     np.sum(loss2_total)*1.0/len(loss2_total),
+                                     np.sum(depth_total)*1.0/len(depth_total)))
 
 
 
@@ -220,19 +220,19 @@ def run_training2(data, objects, settings):
             if len(loss1_total) == 0:
                 avg_loss1 = 0
             else:
-                avg_loss1 = np.sum(loss1_total)/len(loss1_total)
+                avg_loss1 = np.sum(loss1_total)*1.0/len(loss1_total)
             if len(acc_total) == 0:
                 avg_acc = 0
             else:
-                avg_acc = np.sum(acc_total)/len(acc_total)
+                avg_acc = np.sum(acc_total)*1.0/len(acc_total)
             if len(loss2_total) == 0:
                 avg_loss2 = 0
             else:
-                avg_loss2 = np.sum(loss2_total)/len(loss2_total)
+                avg_loss2 = np.sum(loss2_total)*1.0/len(loss2_total)
             if len(depth_total) == 0:
                 avg_depth = 0
             else:
-                avg_depth = np.sum(depth_total)/len(depth_total)
+                avg_depth = np.sum(depth_total)*1.0/len(depth_total)
 
             copy_weights_rl_to_encoder(objects)
 
@@ -268,10 +268,10 @@ def run_training2(data, objects, settings):
             acc_total.append(loss1[1])
             sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
                              .format(i+1, val_epoch_size,
-                                     np.sum(loss1_total)/len(loss1_total),
-                                     np.sum(acc_total)/len(acc_total),
-                                     np.sum(loss2_total)/len(loss2_total),
-                                     np.sum(depth_total)/len(depth_total)))
+                                     np.sum(loss1_total)*1.0/len(loss1_total),
+                                     np.sum(acc_total)*1.0/len(acc_total),
+                                     np.sum(loss2_total)*1.0/len(loss2_total),
+                                     np.sum(depth_total)*1.0/len(depth_total)))
 
 
 
@@ -298,11 +298,11 @@ def run_training_encoder_only(data, objects, settings):
             if len(loss1_total) == 0:
                 avg_loss1 = 0
             else:
-                avg_loss1 = np.sum(loss1_total)/len(loss1_total)
+                avg_loss1 = np.sum(loss1_total)*1.0/len(loss1_total)
             if len(acc_total) == 0:
                 avg_acc = 0
             else:
-                avg_acc = np.sum(acc_total)/len(acc_total)
+                avg_acc = np.sum(acc_total)*1.0/len(acc_total)
 
             sys.stdout.write("\r batch {} / {}: loss1 = {:.4f}, acc = {:.4f}"
                          .format(j+1, epoch_size, avg_loss1, avg_acc))
@@ -318,8 +318,8 @@ def run_training_encoder_only(data, objects, settings):
             acc_total.append(loss1[1])
             sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}"
                              .format(i+1, val_epoch_size,
-                                     np.sum(loss1_total)/len(loss1_total),
-                                     np.sum(acc_total)/len(acc_total)))
+                                     np.sum(loss1_total)*1.0/len(loss1_total),
+                                     np.sum(acc_total)*1.0/len(acc_total)))
 
 
 
@@ -353,11 +353,11 @@ def run_training_RL_only(data, objects, settings):
             if len(loss2_total) == 0:
                 avg_loss2 = 0
             else:
-                avg_loss2 = np.sum(loss2_total)/len(loss2_total)
+                avg_loss2 = np.sum(loss2_total)*1.0/len(loss2_total)
             if len(depth_total) == 0:
                 avg_depth = 0
             else:
-                avg_depth = np.sum(depth_total)/len(depth_total)
+                avg_depth = np.sum(depth_total)*1.0/len(depth_total)
             sys.stdout.write("\r batch {} / {}: loss2 = {:.4f}, avg depth = {:.2f}".format(j+1, epoch_size, avg_loss2, avg_depth))
             copy_weights_rl_to_encoder(objects)
         sys.stdout.write("\n")
@@ -385,10 +385,10 @@ def run_training_RL_only(data, objects, settings):
             acc_total.append(loss1[1])
             sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
                              .format(i+1, val_epoch_size,
-                                     np.sum(loss1_total)/len(loss1_total),
-                                     np.sum(acc_total)/len(acc_total),
-                                     np.sum(loss2_total)/len(loss2_total),
-                                     np.sum(depth_total)/len(depth_total)))
+                                     np.sum(loss1_total)*1.0/len(loss1_total),
+                                     np.sum(acc_total)*1.0/len(acc_total),
+                                     np.sum(loss2_total)*1.0/len(loss2_total),
+                                     np.sum(depth_total)*1.0/len(depth_total)))
 
 def restore_exp(settings, x, total_error, h, policy, fk_calculated):
     error_mult = np.repeat(np.expand_dims(total_error, axis=1), fk_calculated.shape[1], axis=1)
