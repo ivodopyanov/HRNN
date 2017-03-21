@@ -25,26 +25,19 @@ class RL_Layer(Layer):
         self.W_action_1 = self.add_weight((self.hidden_dim, self.action_dim),
                                           initializer=glorot_uniform(),
                                           regularizer=l2(self.l2),
-                                          trainable=False,
                                           name='W_action_1_{}'.format(self.name))
         self.U_action_1 = self.add_weight((self.hidden_dim, self.action_dim),
                                           initializer=orthogonal(),
-                                          trainable=False,
                                           name='U_action_1_{}'.format(self.name))
         self.b_action_1 = self.add_weight((self.action_dim,),
                                           initializer=zeros(),
-                                          trainable=False,
                                           name='b_action_2_{}'.format(self.name))
-
         self.W_action_2 = self.add_weight((self.action_dim, 2),
                                           initializer=glorot_uniform(),
-                                          trainable=False,
                                           name='W_action_2_{}'.format(self.name))
         self.b_action_2 = self.add_weight((2,),
                                           initializer=zeros(),
-                                          trainable=False,
                                           name='b_action_2_{}'.format(self.name))
-
         self.built = True
 
     def compute_mask(self, input, input_mask=None):
