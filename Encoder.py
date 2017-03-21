@@ -124,20 +124,20 @@ class Encoder(Layer):
         x = x.dimshuffle([1,0,2])
         x = x[:bucket_size]
 
-        initial_action = TS.zeros_like(x[:,:,0], dtype="int8")
+        initial_action = TS.zeros_like(x[:,:,0], dtype="bool")
 
 
         first_mask = K.zeros_like(data_mask[0])
         first_mask = K.expand_dims(first_mask, 0)
 
         eos_mask = K.concatenate([data_mask[1:], first_mask], axis=0)
-        eos_mask = TS.cast(data_mask*(1-eos_mask), "int8")
+        eos_mask = TS.cast(data_mask*(1-eos_mask), "bool")
 
 
         if self.depth > 1:
             results, _ = T.scan(self.vertical_step,
                             outputs_info=[x, initial_action, data_mask],
-                            non_sequences=[bucket_size, eos_mask, K.zeros((self.batch_size), dtype="int8")],
+                            non_sequences=[bucket_size, eos_mask, K.zeros((self.batch_size), dtype="bool")],
                             n_steps=self.depth-1)
             x = results[0][-1]
             initial_action = results[1][-1]
@@ -146,7 +146,7 @@ class Encoder(Layer):
 
         results, _ = T.scan(self.vertical_step,
                             outputs_info=[x, initial_action, data_mask],
-                            non_sequences=[bucket_size, eos_mask, K.ones((self.batch_size), dtype="int8")],
+                            non_sequences=[bucket_size, eos_mask, K.ones((self.batch_size), dtype="bool")],
                             n_steps=1)
 
         outputs = results[0]
@@ -164,9 +164,9 @@ class Encoder(Layer):
 
 
         initial_h = K.zeros((self.batch_size, self.hidden_dim))
-        initial_action = K.zeros((self.batch_size), dtype="int8")
-        initial_data_mask = K.zeros((self.batch_size), dtype="int8")
-        initial_both_output = K.zeros((self.batch_size), dtype="int8")
+        initial_action = K.zeros((self.batch_size), dtype="bool")
+        initial_data_mask = K.zeros((self.batch_size), dtype="bool")
+        initial_both_output = K.zeros((self.batch_size), dtype="bool")
 
         shifted_data_mask = K.concatenate([K.ones((1, self.batch_size)), data_mask[:-1]], axis=0)
         shifted_eos_mask = K.concatenate([K.zeros((1, self.batch_size)), eos_mask[:-1]], axis=0)
@@ -231,7 +231,7 @@ class Encoder(Layer):
         action = K.switch(action_prev, 1, action)
         action = K.switch(last_layer_mask3, 1, action)
         action = K.switch(eos_mask_tm1, 0, action)
-        action = TS.cast(action, "int8")
+        action = TS.cast(action, "bool")
 
         # Actual new hidden state if node got info from left and from below
         s1 = self.ln(K.dot(x*B_W, self.W) + self.b, self.gammas[0], self.betas[0])
@@ -246,10 +246,10 @@ class Encoder(Layer):
         both = (1-action_prev)*data_mask_prev*action*data_mask_tm1
         h_tm1_only = data_mask_tm1*action*(action_prev + (1-action_prev)*(1-data_mask_prev))
         x_only = data_mask_prev*(1-action_prev)*((1-action) + action*(1-data_mask_tm1))
-        both_output = TS.cast(both, "int8")
+        both_output = TS.cast(both, "bool")
 
         data_mask = both + x_only + h_tm1_only
-        data_mask = TS.cast(data_mask, "int8")
+        data_mask = TS.cast(data_mask, "bool")
 
         both = both.dimshuffle([0,'x'])
         both = TS.extra_ops.repeat(both, self.hidden_dim, axis=1)

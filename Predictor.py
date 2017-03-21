@@ -129,23 +129,23 @@ class Predictor(Layer):
         x = x.dimshuffle([1,0,2])
         x = x[:bucket_size]
 
-        initial_action = TS.zeros_like(x[:,:,0], dtype="int8")
-        initial_action_calculated = TS.zeros_like(x[:,:,0], dtype="int8")
+        initial_action = TS.zeros_like(x[:,:,0], dtype="bool")
+        initial_action_calculated = TS.zeros_like(x[:,:,0], dtype="bool")
         first_mask = K.zeros_like(data_mask[0])
         first_mask = K.expand_dims(first_mask, 0)
         eos_mask = K.concatenate([data_mask[1:], first_mask], axis=0)
-        eos_mask = TS.cast(data_mask*(1-eos_mask), "int8")
+        eos_mask = TS.cast(data_mask*(1-eos_mask), "bool")
         initial_policy = K.zeros_like(x[:,:,0])
         initial_policy = initial_policy.dimshuffle([0,1,'x'])
         initial_policy = TS.extra_ops.repeat(initial_policy, 2, axis=2)
         initial_policy_input_x = K.zeros_like(x)
         initial_policy_input_h = K.zeros_like(x)
-        initial_depth = K.zeros((1,), dtype="int8")
+        initial_depth = K.zeros((1,), dtype="bool")
 
         if self.depth > 1:
             results, _ = T.scan(self.vertical_step,
                                 outputs_info=[x, initial_action, data_mask, initial_action_calculated, initial_policy_input_x, initial_policy_input_h, initial_policy, initial_depth],
-                                non_sequences=[bucket_size, eos_mask, K.zeros((self.batch_size), dtype="int8")],
+                                non_sequences=[bucket_size, eos_mask, K.zeros((self.batch_size), dtype="bool")],
                                 n_steps=self.depth-1)
             x = results[0][-1]
             initial_action = results[1][-1]
@@ -158,7 +158,7 @@ class Predictor(Layer):
 
         last_layer_results, _ = T.scan(self.vertical_step,
                             outputs_info=[x, initial_action, data_mask, initial_action_calculated, initial_policy_input_x, initial_policy_input_h, initial_policy, initial_depth],
-                            non_sequences=[bucket_size, eos_mask, K.zeros((self.batch_size), dtype="int8")],
+                            non_sequences=[bucket_size, eos_mask, K.zeros((self.batch_size), dtype="bool")],
                             n_steps=1)
 
         output = last_layer_results[0][-1, -1, :, :]
@@ -193,10 +193,10 @@ class Predictor(Layer):
         last_layer_mask3 = args[10]
 
         initial_h = K.zeros((self.batch_size, self.hidden_dim))
-        initial_action = K.zeros((self.batch_size), dtype="int8")
-        initial_data_mask = K.zeros((self.batch_size), dtype="int8")
-        initial_both_output = K.zeros((self.batch_size), dtype="int8")
-        initial_action_calculated = K.zeros((self.batch_size), dtype="int8")
+        initial_action = K.zeros((self.batch_size), dtype="bool")
+        initial_data_mask = K.zeros((self.batch_size), dtype="bool")
+        initial_both_output = K.zeros((self.batch_size), dtype="bool")
+        initial_action_calculated = K.zeros((self.batch_size), dtype="bool")
         initial_policy = K.zeros((self.batch_size, 2))
 
         shifted_data_mask = K.concatenate([K.ones((1, self.batch_size)), data_mask[:-1]], axis=0)
@@ -227,7 +227,7 @@ class Predictor(Layer):
         policy_input_x = x
         policy_input_h = K.concatenate([K.zeros((1, self.batch_size, self.hidden_dim)), h[1:]], axis=0)
 
-        new_depth = TS.cast(depth_prev+1, dtype="int8")
+        new_depth = TS.cast(depth_prev+1, dtype="bool")
 
         return [h, shifted_action, new_data_mask, action_calculated, policy_input_x, policy_input_h, policy, new_depth], T.scan_module.until(TS.eq(TS.sum(both_output), 0))
 
@@ -277,10 +277,10 @@ class Predictor(Layer):
         action = K.switch(action_prev, 1, action)
         action = K.switch(last_layer_mask3, 1, action)
         action = K.switch(eos_mask_tm1, 0, action)
-        action = TS.cast(action, "int8")
+        action = TS.cast(action, "bool")
 
         action_calculated = data_mask_prev_tm1*(1-last_layer_mask3)*(1-eos_mask_tm1)*(1-action_prev)
-        action_calculated = TS.cast(action_calculated, "int8")
+        action_calculated = TS.cast(action_calculated, "bool")
 
         # Actual new hidden state if node got info from left and from below
         s1 = self.ln(K.dot(x*B_W, self.W) + self.b, self.gammas[0], self.betas[0])
@@ -294,10 +294,10 @@ class Predictor(Layer):
         both = (1-action_prev)*data_mask_prev*action*data_mask_tm1
         h_tm1_only = data_mask_tm1*action*(action_prev + (1-action_prev)*(1-data_mask_prev))
         x_only = data_mask_prev*(1-action_prev)*((1-action) + action*(1-data_mask_tm1))
-        both_output = TS.cast(both, "int8")
+        both_output = TS.cast(both, "bool")
 
         data_mask = both + x_only + h_tm1_only
-        data_mask = TS.cast(data_mask, "int8")
+        data_mask = TS.cast(data_mask, "bool")
 
         both = both.dimshuffle([0,'x'])
         both = TS.extra_ops.repeat(both, self.hidden_dim, axis=1)
@@ -341,8 +341,6 @@ class Predictor(Layer):
                   'dropout_w': self.dropout_w,
                   'dropout_u': self.dropout_u,
                   'dropout_action': self.dropout_action,
-                  'depth': self.depth,
-                  'init': self.init.__name__,
-                  'inner_init': self.inner_init.__name__}
+                  'depth': self.depth}
         base_config = super(Predictor, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
