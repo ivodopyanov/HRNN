@@ -1,24 +1,19 @@
 # -*- coding: utf-8 -*-
-import os
-import numpy as np
 import sys
-import csv
-import random
-from math import ceil, floor
+from io import open
+from math import ceil
 
+import numpy as np
 
+from keras.layers import Dense, Dropout, Input, Masking, Activation
 from keras.models import Model
-from keras.layers import Dense, Dropout, Input, Masking, Activation, Embedding
 from keras.optimizers import Adam
-from keras.callbacks import LearningRateScheduler
-import keras.backend as K
 
-from Encoder import Encoder
-from Predictor import Predictor
-from RL_layer import RL_Layer
 import utils
+from Encoder.Encoder_Predictor import Encoder_Predictor
+from Encoder.Encoder_Processor import Encoder_Processor
+from Encoder.Encoder_RL_layer import Encoder_RL_Layer
 from train_utils import run_training2, copy_weights_encoder_to_predictor_charbased
-
 
 CASES_FILENAME = "cases.txt"
 QUOTES = ["'", '“', '"']
@@ -26,9 +21,9 @@ QUOTES = ["'", '“', '"']
 
 
 def get_data(settings):
-    with open(utils.SENTENCES_FILENAME, "rt") as f:
+    with open(utils.SENTENCES_FILENAME, "rt", encoding="utf8") as f:
         sentences = f.read().split(utils.EOS_WORD)
-    with open(utils.LABELS_FILENAME, "rt") as f:
+    with open(utils.LABELS_FILENAME, "rt", encoding="utf8") as f:
         labels = f.read().splitlines()
 
     sentences = sentences[:-1]
@@ -75,10 +70,12 @@ def init_settings():
     settings['epochs'] = 50
     settings['random_action_prob'] = 0
     settings['copy_etp'] = copy_weights_encoder_to_predictor_charbased
+    settings['l2'] = 0.00001
+    settings['epoch_mult'] = 1
     return settings
 
 def prepare_objects(data, settings):
-    with open(utils.INDEXES_FILENAME, "rt") as f:
+    with open(utils.INDEXES_FILENAME, "rt", encoding="utf8") as f:
         indexes = f.read().splitlines()
     indexes = [int(index) for index in indexes]
     train_segment = int(len(indexes)*0.9)
@@ -104,24 +101,26 @@ def build_encoder(data, settings):
     data_input = Input(shape=(settings['max_len'],data['char_count']))
     bucket_size_input = Input(shape=(1,),dtype="int32")
     masking = Masking()(data_input)
-    encoder = Encoder(input_dim=data['char_count'],
-                                   hidden_dim=settings['sentence_embedding_size'],
-                                   depth=settings['depth'],
-                                   action_dim=settings['action_dim'],
-                                   batch_size = settings['batch_size'],
-                                   max_len=settings['max_len'],
-                                   dropout_u=settings['dropout_U'],
-                                   dropout_w=settings['dropout_W'],
-                                   dropout_action=settings['dropout_action'],
-                                   name='encoder')([masking, bucket_size_input])
+    encoder = Encoder_Processor(input_dim=data['char_count'],
+                                hidden_dim=settings['sentence_embedding_size'],
+                                depth=settings['depth'],
+                                action_dim=settings['action_dim'],
+                                batch_size = settings['batch_size'],
+                                max_len=settings['max_len'],
+                                dropout_u=settings['dropout_U'],
+                                dropout_w=settings['dropout_W'],
+                                dropout_action=settings['dropout_action'],
+                                l2=settings['l2'],
+                                name='encoder')([masking, bucket_size_input])
     layer = encoder
 
     for idx, hidden_dim in enumerate(settings['hidden_dims']):
+        layer = Dropout(settings['dense_dropout'])(layer)
         layer = Dense(hidden_dim, name='dense_{}'.format(idx))(layer)
         layer = Activation('tanh')(layer)
-        layer = Dropout(settings['dense_dropout'])(layer)
+    layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(input=[data_input, bucket_size_input], output=output)
+    model = Model(inputs=[data_input, bucket_size_input], outputs=[output])
     optimizer = Adam(lr=0.001, clipnorm=5)
     model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=['accuracy'])
     return model
@@ -131,38 +130,40 @@ def build_predictor(data, settings):
     data_input = Input(shape=(settings['max_len'],data['char_count']))
     bucket_size_input = Input(shape=(1,),dtype="int32")
     masking = Masking()(data_input)
-    encoder = Predictor(input_dim=data['char_count'],
-                                     hidden_dim=settings['sentence_embedding_size'],
-                                     depth=settings['depth'],
-                                     action_dim=settings['action_dim'],
-                                     batch_size=settings['batch_size'],
-                                     max_len=settings['max_len'],
-                                     random_action_prob=settings['random_action_prob'],
-                                     dropout_u=settings['dropout_U'],
-                                     dropout_w=settings['dropout_W'],
-                                     dropout_action=settings['dropout_action'],
-                                     name='encoder')([masking, bucket_size_input])
+    encoder = Encoder_Predictor(input_dim=data['char_count'],
+                                hidden_dim=settings['sentence_embedding_size'],
+                                depth=settings['depth'],
+                                action_dim=settings['action_dim'],
+                                batch_size=settings['batch_size'],
+                                max_len=settings['max_len'],
+                                random_action_prob=settings['random_action_prob'],
+                                dropout_u=settings['dropout_U'],
+                                dropout_w=settings['dropout_W'],
+                                dropout_action=settings['dropout_action'],
+                                name='encoder')([masking, bucket_size_input])
     layer = encoder[0]
 
     for idx, hidden_dim in enumerate(settings['hidden_dims']):
+        layer = Dropout(settings['dense_dropout'])(layer)
         layer = Dense(hidden_dim, name='dense_{}'.format(idx))(layer)
         layer = Activation('tanh')(layer)
-        layer = Dropout(settings['dense_dropout'])(layer)
+    layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(input=[data_input, bucket_size_input], output=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6]])
+    model = Model(inputs=[data_input, bucket_size_input], outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6]])
     optimizer = Adam(lr=0.001, clipnorm=5)
     return model
 
 def build_RL_model(settings):
     x_input = Input(shape=(settings['sentence_embedding_size'],))
     h_tm1_input = Input(shape=(settings['sentence_embedding_size'],))
-    layer = RL_Layer(hidden_dim=settings['sentence_embedding_size'],
-                     action_dim=settings['action_dim'],
-                     dropout_action=settings['dropout_action'],
-                     dropout_w=settings['dropout_W'],
-                     dropout_u=settings['dropout_U'],
-                     name='encoder')([x_input, h_tm1_input])
-    model = Model(input=[x_input, h_tm1_input], output=layer)
+    layer = Encoder_RL_Layer(hidden_dim=settings['sentence_embedding_size'],
+                             action_dim=settings['action_dim'],
+                             dropout_action=settings['dropout_action'],
+                             dropout_w=settings['dropout_W'],
+                             dropout_u=settings['dropout_U'],
+                             l2=settings['l2'],
+                             name='encoder')([x_input, h_tm1_input])
+    model = Model(inputs=[x_input, h_tm1_input], outputs=[layer])
     model.compile(loss='mse', optimizer='adam')
     return model
 

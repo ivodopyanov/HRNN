@@ -7,7 +7,7 @@ import theano.tensor as TS
 from keras.initializers import glorot_uniform, orthogonal, zeros
 from keras.regularizers import l2
 
-class RL_Layer(Layer):
+class Decoder_RL_Layer(Layer):
     def __init__(self,hidden_dim, action_dim,
                  dropout_w, dropout_u, dropout_action, l2, **kwargs):
         self.hidden_dim = hidden_dim
@@ -18,7 +18,7 @@ class RL_Layer(Layer):
         self.l2 = l2
         if self.dropout_w or self.dropout_u or self.dropout_action:
             self.uses_learning_phase = True
-        super(RL_Layer, self).__init__(**kwargs)
+        super(Decoder_RL_Layer, self).__init__(**kwargs)
 
 
     def build(self, input_shape):
@@ -76,5 +76,5 @@ class RL_Layer(Layer):
                   'dropout_action': self.dropout_action,
                   'dropout_w': self.dropout_w,
                   'dropout_u': self.dropout_u}
-        base_config = super(RL_Layer, self).get_config()
+        base_config = super(Decoder_RL_Layer, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
