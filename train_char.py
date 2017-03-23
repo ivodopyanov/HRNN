@@ -149,7 +149,7 @@ def build_predictor(data, settings):
         layer = Activation('tanh')(layer)
     layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(inputs=[data_input, bucket_size_input], outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6]])
+    model = Model(inputs=[data_input, bucket_size_input], outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6], encoder[7]])
     optimizer = Adam(lr=0.001, clipnorm=5)
     return model
 
@@ -182,7 +182,7 @@ def build_generator_HRNN(data, settings, indexes):
                 np.random.shuffle(walk_order)
             if len(sentence) > settings['max_len']:
                 continue
-            bucket_size = ceil((len(sentence)+1) / settings['bucket_size_step'])*settings['bucket_size_step']
+            bucket_size = ceil((len(sentence)+1.0) / settings['bucket_size_step'])*settings['bucket_size_step']
             if bucket_size not in buckets:
                 buckets[bucket_size] = []
             buckets[bucket_size].append((sentence, label))
