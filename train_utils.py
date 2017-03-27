@@ -62,7 +62,6 @@ def run_training2(data, objects, settings):
         loss1_total = []
         acc_total = []
         loss2_total = []
-        depth_total = []
         for j in range(epoch_size):
             batch = next(objects['data_gen'])
             loss1 = encoder.train_on_batch(batch[0], batch[1])
@@ -74,20 +73,16 @@ def run_training2(data, objects, settings):
             y_pred = predictor.predict_on_batch(batch[0])
 
             output = y_pred[0]
-            action = y_pred[1]
-            action_calculated = y_pred[2]
-            x = y_pred[3]
-            h = y_pred[4]
-            policy = y_pred[5]
-            depth = y_pred[6]
-            action1 = y_pred[7]
+            input_x = y_pred[1]
+            input_h = y_pred[2]
+            policy = y_pred[3]
+            policy_calculated = y_pred[4]
 
             error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
-            X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
+            X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated)
             loss2 = rl_model.train_on_batch(X,Y)
 
             loss2_total.append(loss2)
-            depth_total.append(depth[0])
 
             copy_weights_rl_to_predictor(objects)
 
@@ -103,49 +98,40 @@ def run_training2(data, objects, settings):
                 avg_loss2 = 0
             else:
                 avg_loss2 = np.sum(loss2_total)*1.0/len(loss2_total)
-            if len(depth_total) == 0:
-                avg_depth = 0
-            else:
-                avg_depth = np.sum(depth_total)*1.0/len(depth_total)
 
             copy_weights_rl_to_encoder(objects)
 
-            sys.stdout.write("\r batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
+            sys.stdout.write("\r batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}"
                          .format(j+1, epoch_size,
-                                 avg_loss1, avg_acc, avg_loss2, avg_depth))
+                                 avg_loss1, avg_acc, avg_loss2))
 
 
         sys.stdout.write("\n")
         loss1_total = []
         acc_total = []
         loss2_total = []
-        depth_total = []
         for i in range(val_epoch_size):
             batch = next(objects['val_gen'])
             loss1 = encoder.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
             y_pred = predictor.predict_on_batch(batch[0])
 
             output = y_pred[0]
-            action = y_pred[1]
-            action_calculated = y_pred[2]
-            x = y_pred[3]
-            h = y_pred[4]
-            policy = y_pred[5]
-            depth = y_pred[6]
+            input_x = y_pred[1]
+            input_h = y_pred[2]
+            policy = y_pred[3]
+            policy_calculated = y_pred[4]
             error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
-            X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
+            X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated)
             loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
 
             loss2_total.append(loss2)
-            depth_total.append(depth[0])
             loss1_total.append(loss1[0])
             acc_total.append(loss1[1])
-            sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
+            sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}"
                              .format(i+1, val_epoch_size,
                                      np.sum(loss1_total)*1.0/len(loss1_total),
                                      np.sum(acc_total)*1.0/len(acc_total),
-                                     np.sum(loss2_total)*1.0/len(loss2_total),
-                                     np.sum(depth_total)*1.0/len(depth_total)))
+                                     np.sum(loss2_total)*1.0/len(loss2_total)))
 
 
 

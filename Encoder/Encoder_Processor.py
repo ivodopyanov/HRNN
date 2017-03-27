@@ -11,93 +11,14 @@ import theano as T
 import theano.tensor as TS
 from theano.ifelse import ifelse
 from theano.printing import Print
+from Encoder_Base import Encoder_Base
 
 
-class Encoder_Processor(Layer):
-    def __init__(self, input_dim, hidden_dim, action_dim, depth, batch_size, max_len,
-                 dropout_w, dropout_u, dropout_action, l2, **kwargs):
-        '''
-        Layer also uses
-        * Layer Normalization
-        * Bucketing (bucket size goes as input of shape (1,1)
-        * Masking
-        * Dropout
-
-        :param input_dim: dimensionality of input tensor (num of chars\word embedding size)
-        :param hidden_dim: dimensionality of hidden and output tensors
-        :param depth: tree hierarchy depth
-        '''
-        self.hidden_dim = hidden_dim
-        self.input_dim = input_dim
-        self.action_dim = action_dim
-        self.depth = depth
-        self.batch_size = batch_size
-        self.max_len = max_len
-        self.dropout_w = dropout_w
-        self.dropout_u = dropout_u
-        self.dropout_action = dropout_action
-        self.supports_masking = True
-        self.epsilon = 1e-5
-        self.l2 = l2
-
-        if self.dropout_w or self.dropout_u or self.dropout_action:
-            self.uses_learning_phase = True
-
+class Encoder_Processor(Encoder_Base):
+    def __init__(self, **kwargs):
         super(Encoder_Processor, self).__init__(**kwargs)
 
 
-
-    def build(self, input_shape):
-        self.W_emb = self.add_weight((self.input_dim, self.hidden_dim),
-                                     initializer=glorot_uniform(),
-                                     regularizer=l2(self.l2),
-                                     name='W_emb_{}'.format(self.name))
-        self.b_emb = self.add_weight((self.hidden_dim),
-                                     initializer=zeros(),
-                                     name='b_emb_{}'.format(self.name))
-
-        self.W = self.add_weight((self.hidden_dim, 3*self.hidden_dim),
-                                 initializer=glorot_uniform(),
-                                 regularizer=l2(self.l2),
-                                 name='W_{}'.format(self.name))
-        self.U = self.add_weight((self.hidden_dim, 3*self.hidden_dim),
-                                 initializer=orthogonal(),
-                                 regularizer=l2(self.l2),
-                                 name='U_{}'.format(self.name))
-        self.b = self.add_weight((3*self.hidden_dim),
-                                 initializer=zeros(),
-                                 name='b_{}'.format(self.name))
-
-
-        self.W_action_1 = self.add_weight((self.hidden_dim, self.action_dim),
-                                          initializer=glorot_uniform(),
-                                          trainable=False,
-                                          name='W_action_1_{}'.format(self.name))
-        self.U_action_1 = self.add_weight((self.hidden_dim, self.action_dim),
-                                          initializer=orthogonal(),
-                                          trainable=False,
-                                          name='U_action_1_{}'.format(self.name))
-        self.b_action_1 = self.add_weight((self.action_dim,),
-                                          initializer=zeros(),
-                                          trainable=False,
-                                          name='b_action_2_{}'.format(self.name))
-
-        self.W_action_2 = self.add_weight((self.action_dim, 2),
-                                          initializer=glorot_uniform(),
-                                          trainable=False,
-                                          name='W_action_2_{}'.format(self.name))
-        self.b_action_2 = self.add_weight((2,),
-                                          initializer=zeros(),
-                                          trainable=False,
-                                          name='b_action_2_{}'.format(self.name))
-
-        self.gammas = self.add_weight((2, 3*self.hidden_dim,),
-                                      initializer=zeros(),
-                                      name='gammas_{}'.format(self.name))
-        self.betas = self.add_weight((2, 3*self.hidden_dim,),
-                                     initializer=zeros(),
-                                     name='betas_{}'.format(self.name))
-        self.built = True
 
     def compute_mask(self, input, input_mask=None):
         return None
@@ -124,89 +45,45 @@ class Encoder_Processor(Layer):
         x = x.dimshuffle([1,0,2])
         x = x[:bucket_size]
 
-        initial_action = TS.zeros_like(x[:,:,0], dtype="bool")
-
-
-        first_mask = K.zeros_like(data_mask[0])
-        first_mask = K.expand_dims(first_mask, 0)
-
-        eos_mask = K.concatenate([data_mask[1:], first_mask], axis=0)
-        eos_mask = TS.cast(data_mask*(1-eos_mask), "bool")
-
+        initial_h = K.zeros((self.batch_size, self.hidden_dim))
 
         if self.depth > 1:
             results, _ = T.scan(self.vertical_step,
-                            outputs_info=[x, initial_action, data_mask],
-                            non_sequences=[bucket_size, eos_mask, K.zeros((self.batch_size), dtype="bool")],
+                            outputs_info=[x, data_mask],
+                            non_sequences=[bucket_size],
                             n_steps=self.depth-1)
             x = results[0][-1]
-            initial_action = results[1][-1]
-            data_mask = results[2][-1]
+            data_mask = results[1][-1]
 
 
-        results, _ = T.scan(self.vertical_step,
-                            outputs_info=[x, initial_action, data_mask],
-                            non_sequences=[bucket_size, eos_mask, K.ones((self.batch_size), dtype="bool")],
-                            n_steps=1)
+        results, _ = T.scan(self.final_step,
+                            sequences=[x, data_mask],
+                            outputs_info=[initial_h])
 
-        outputs = results[0]
-        outputs = outputs[-1,-1,:,:]
+        outputs = results[-1]
         return outputs
 
-    # Vertical pass along hierarchy dimension
-    def vertical_step(self, *args):
-        x = args[0]
-        action_prev = args[1]
-        data_mask = args[2]
-        bucket_size=args[3]
-        eos_mask = args[4]
-        last_layer_mask3 = args[5]
 
+    def vertical_step(self, x, x_mask, bucket_size):
+        initial_h = x[0]
+        initial_total_h = K.zeros_like(x)
+        initial_total_h = initial_total_h.dimshuffle([1,0,2])
+        initial_total_h_mask = K.zeros_like(x_mask)
+        initial_total_h_mask = initial_total_h_mask.dimshuffle([1,0])
 
-        initial_h = K.zeros((self.batch_size, self.hidden_dim))
-        initial_action = K.zeros((self.batch_size), dtype="bool")
-        initial_data_mask = K.zeros((self.batch_size), dtype="bool")
-        initial_both_output = K.zeros((self.batch_size), dtype="bool")
-
-        shifted_data_mask = K.concatenate([K.ones((1, self.batch_size)), data_mask[:-1]], axis=0)
-        shifted_eos_mask = K.concatenate([K.zeros((1, self.batch_size)), eos_mask[:-1]], axis=0)
-
+        initial_x_mask_tm1 = x_mask[0]
 
         results, _ = T.scan(self.horizontal_step,
-                            sequences=[x, action_prev, shifted_data_mask, data_mask, shifted_eos_mask, eos_mask],
-                            outputs_info=[initial_h, initial_action, initial_data_mask, initial_both_output],
-                            non_sequences=[last_layer_mask3],
-                            n_steps=bucket_size)
-        h = results[0]
-        action = results[1]
-        new_data_mask = results[2]
-        both_output = results[3]
+                            sequences=[x[1:], x_mask[1:]],
+                            outputs_info=[initial_h, initial_total_h, initial_total_h_mask, initial_x_mask_tm1],
+                            non_sequences=[bucket_size])
+        total_h = results[1]
+        total_h_mask = results[2]
 
-        #Shift computed action for 1 step left because at the step i we compute action for i-1
-        last_action = K.zeros_like(action[0])
-        last_action = K.expand_dims(last_action, 0)
-        shifted_action = K.concatenate([action[1:], last_action], axis=0)
-        shifted_action = TS.unbroadcast(shifted_action, 0, 1)
-        # Uncomment to monitor action values during testing
+        return total_h[-1].dimshuffle([1,0,2]), total_h_mask[-1].dimshuffle([1,0])
 
-        #shifted_action = Print("shifted_action")(shifted_action)
-        #has_value = Print("has_value")(has_value)
-        return [h, shifted_action, new_data_mask], T.scan_module.until(TS.eq(TS.sum(both_output), 0))
-
-    # Horizontal pass along time dimension
-    def horizontal_step(self, *args):
-        x = args[0]
-        action_prev = args[1]
-        data_mask_prev_tm1 = args[2]
-        data_mask_prev = args[3]
-        eos_mask_tm1 = args[4]
-        eos_mask = args[5]
-        h_tm1 = args[6]
-        action_tm1 = args[7]
-        data_mask_tm1 = args[8]
-        both_output_tm1 = args[9]
-        last_layer_mask3 = args[10]
-
+    def horizontal_step(self, x, x_mask, h_tm1, total_h_tm1, total_h_mask_tm1, x_mask_tm1, bucket_size):
+        total_h_mask_next = self.get_next_value_mask(total_h_mask_tm1)
 
         if 0 < self.dropout_u < 1:
             ones = K.ones((self.hidden_dim))
@@ -227,72 +104,35 @@ class Encoder_Processor(Layer):
         policy = activations.relu(K.dot(x*B_W, self.W_action_1) + K.dot(h_tm1*B_U, self.U_action_1) + self.b_action_1)
         policy = K.exp(K.minimum(K.dot(policy*B_action, self.W_action_2)+self.b_action_2,5))
 
-        action = K.switch(TS.le(policy[:,0], policy[:, 1]), 1, 0)
-        action = K.switch(action_prev, 1, action)
-        action = K.switch(last_layer_mask3, 1, action)
-        action = K.switch(eos_mask_tm1, 0, action)
-        action = TS.cast(action, "bool")
-
-        # Actual new hidden state if node got info from left and from below
-        s1 = self.ln(K.dot(x*B_W, self.W) + self.b, self.gammas[0], self.betas[0])
-        s2 = self.ln(K.dot(h_tm1*B_U, self.U[:,:2*self.hidden_dim]), self.gammas[1,:2*self.hidden_dim], self.betas[1,:2*self.hidden_dim])
-        s = K.hard_sigmoid(s1[:,:2*self.hidden_dim] + s2)
-        z = s[:,:self.hidden_dim]
-        r = s[:,self.hidden_dim:2*self.hidden_dim]
-        h_ = z*h_tm1 + (1-z)*K.tanh(s1[:,2*self.hidden_dim:] + self.ln(K.dot(r*h_tm1*B_U, self.U[:,2*self.hidden_dim:]), self.gammas[1,2*self.hidden_dim:], self.betas[1,2*self.hidden_dim:]))
+        continue_accumulation = K.switch(TS.le(policy[:,0], policy[:, 1]), 1, 0)
+        continue_accumulation = K.switch(x_mask_tm1*(1-x_mask), 0, continue_accumulation)
+        continue_accumulation = TS.cast(continue_accumulation, "bool")
 
 
-        zeros = K.zeros((self.batch_size, self.hidden_dim))
-        both = (1-action_prev)*data_mask_prev*action*data_mask_tm1
-        h_tm1_only = data_mask_tm1*action*(action_prev + (1-action_prev)*(1-data_mask_prev))
-        x_only = data_mask_prev*(1-action_prev)*((1-action) + action*(1-data_mask_tm1))
-        both_output = TS.cast(both, "bool")
+        total_h_after_reduce = self.insert_tensor_at_mask(total_h_tm1, total_h_mask_next, h_tm1, bucket_size)
+        continue_accumulation_for_total_h = continue_accumulation.dimshuffle([0,'x'])
+        continue_accumulation_for_total_h = TS.extra_ops.repeat(continue_accumulation_for_total_h, bucket_size, axis=1)
+        total_h_mask = K.switch(continue_accumulation_for_total_h, total_h_mask_tm1, total_h_mask_tm1 + total_h_mask_next)
+        continue_accumulation_for_total_h = continue_accumulation_for_total_h.dimshuffle([0,1,'x'])
+        continue_accumulation_for_total_h = TS.extra_ops.repeat(continue_accumulation_for_total_h, self.hidden_dim, axis=2)
+        total_h = K.switch(continue_accumulation_for_total_h, total_h_tm1, total_h_after_reduce)
 
-        data_mask = both + x_only + h_tm1_only
-        data_mask = TS.cast(data_mask, "bool")
+        h_ = self.gru_step(x, h_tm1, B_W, B_U)
+        continue_accumulation_for_h = continue_accumulation.dimshuffle([0,'x'])
+        continue_accumulation_for_h = TS.extra_ops.repeat(continue_accumulation_for_h, self.hidden_dim, axis=1)
+        h = K.switch(continue_accumulation_for_h, h_, x)
 
-        both = both.dimshuffle([0,'x'])
-        both = TS.extra_ops.repeat(both, self.hidden_dim, axis=1)
-        h_tm1_only = h_tm1_only.dimshuffle([0,'x'])
-        h_tm1_only = TS.extra_ops.repeat(h_tm1_only, self.hidden_dim, axis=1)
-        x_only = x_only.dimshuffle([0,'x'])
-        x_only = TS.extra_ops.repeat(x_only, self.hidden_dim, axis=1)
+        copy_old_value_mask = (1-x_mask)*(1-x_mask_tm1)
+        copy_old_value_mask = copy_old_value_mask.dimshuffle([0,'x'])
+        copy_old_value_mask = TS.extra_ops.repeat(copy_old_value_mask, bucket_size, axis=1)
+        total_h_mask = K.switch(copy_old_value_mask, total_h_mask_tm1, total_h_mask)
+        copy_old_value_mask = copy_old_value_mask.dimshuffle([0,1,'x'])
+        copy_old_value_mask = TS.extra_ops.repeat(copy_old_value_mask, self.hidden_dim, axis=2)
+        total_h = K.switch(copy_old_value_mask, total_h_tm1, total_h)
 
-        h = K.switch(both, h_, zeros)
-        h = K.switch(h_tm1_only, h_tm1, h)
-        h = K.switch(x_only, x, h)
-
-
-        # Apply mask
-
-        action = K.switch(data_mask_prev_tm1, action, action_tm1)
-        data_mask_prev = data_mask_prev.dimshuffle([0,'x'])
-        data_mask_prev = TS.extra_ops.repeat(data_mask_prev, self.hidden_dim, axis=1)
-        h = K.switch(data_mask_prev, h, h_tm1)
-
-        result = [h, action, data_mask, both_output]
-        return result
-
-
-    # Linear Normalization
-    def ln(self, x, gammas, betas):
-        m = K.mean(x, axis=-1, keepdims=True)
-        std = K.sqrt(K.var(x, axis=-1, keepdims=True) + self.epsilon)
-        x_normed = (x - m) / (std + self.epsilon)
-        x_normed = gammas * x_normed + betas
-        return x_normed
-
+        return h, total_h, total_h_mask, x_mask
 
 
     def get_config(self):
-        config = {'input_dim': self.input_dim,
-                  'hidden_dim': self.hidden_dim,
-                  'action_dim': self.action_dim,
-                  'batch_size': self.batch_size,
-                  'max_len': self.max_len,
-                  'dropout_w': self.dropout_w,
-                  'dropout_u': self.dropout_u,
-                  'dropout_action': self.dropout_action,
-                  'depth': self.depth}
         base_config = super(Encoder_Processor, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        return base_config.items()

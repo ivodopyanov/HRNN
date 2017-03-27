@@ -82,15 +82,15 @@ def update_corpus_with_glove(settings, data):
 
 def init_settings():
     settings = {}
-    settings['word_embedding_size'] = 128
-    settings['sentence_embedding_size'] = 256
-    settings['depth'] = 5
-    settings['action_dim'] = 256
-    settings['dropout_W'] = 0.4
-    settings['dropout_U'] = 0.4
-    settings['dropout_action'] = 0.4
-    settings['dropout_emb'] = 0.4
-    settings['hidden_dims'] = [256]
+    settings['word_embedding_size'] = 32
+    settings['sentence_embedding_size'] = 64
+    settings['depth'] = 6
+    settings['action_dim'] = 64
+    settings['dropout_W'] = 0.2
+    settings['dropout_U'] = 0.2
+    settings['dropout_action'] = 0.2
+    settings['dropout_emb'] = 0.2
+    settings['hidden_dims'] = [64]
     settings['dense_dropout'] = 0.5
     settings['bucket_size_step'] = 4
     settings['batch_size'] = 6
@@ -198,6 +198,7 @@ def build_predictor(data, settings):
                                 dropout_u=settings['dropout_U'],
                                 dropout_w=settings['dropout_W'],
                                 dropout_action=settings['dropout_action'],
+                                l2=settings['l2'],
                                 name='encoder')([embedding, bucket_size_input])
     layer = encoder[0]
 
@@ -207,7 +208,8 @@ def build_predictor(data, settings):
         layer = Activation('tanh')(layer)
     layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(inputs=[data_input, bucket_size_input], outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6], encoder[7]])
+    model = Model(inputs=[data_input, bucket_size_input],
+                  outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4]])
     optimizer = Adam(lr=0.001, clipnorm=5)
     #model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=['accuracy'])
     return model

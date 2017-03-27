@@ -77,7 +77,7 @@ def load_labels():
             label = float(row.split(u"|")[1])
             label = floor(label*5)
             if label == 5:
-                label = 4
+                label = 4.0
             result.append(label)
     return result
 
