@@ -35,6 +35,8 @@ def copy_weights_rl_to_predictor(objects):
     predictor.get_layer('encoder').b_action_1.set_value(K.get_value(rl_model.get_layer('encoder').b_action_1))
     predictor.get_layer('encoder').W_action_2.set_value(K.get_value(rl_model.get_layer('encoder').W_action_2))
     predictor.get_layer('encoder').b_action_2.set_value(K.get_value(rl_model.get_layer('encoder').b_action_2))
+    predictor.get_layer('encoder').W_action_3.set_value(K.get_value(rl_model.get_layer('encoder').W_action_3))
+    predictor.get_layer('encoder').b_action_3.set_value(K.get_value(rl_model.get_layer('encoder').b_action_3))
 
 def copy_weights_rl_to_encoder(objects):
     encoder = objects['encoder']
@@ -44,6 +46,8 @@ def copy_weights_rl_to_encoder(objects):
     encoder.get_layer('encoder').b_action_1.set_value(K.get_value(rl_model.get_layer('encoder').b_action_1))
     encoder.get_layer('encoder').W_action_2.set_value(K.get_value(rl_model.get_layer('encoder').W_action_2))
     encoder.get_layer('encoder').b_action_2.set_value(K.get_value(rl_model.get_layer('encoder').b_action_2))
+    encoder.get_layer('encoder').W_action_3.set_value(K.get_value(rl_model.get_layer('encoder').W_action_3))
+    encoder.get_layer('encoder').b_action_3.set_value(K.get_value(rl_model.get_layer('encoder').b_action_3))
 
 
 
