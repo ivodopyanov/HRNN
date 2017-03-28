@@ -80,7 +80,7 @@ class Encoder_Processor(Encoder_Base):
         total_h = results[1]
         total_h_mask = results[2]
 
-        return total_h[-1].dimshuffle([1,0,2]), total_h_mask[-1].dimshuffle([1,0])
+        return [total_h[-1].dimshuffle([1,0,2]), total_h_mask[-1].dimshuffle([1,0])], T.scan_module.until(TS.eq(TS.sum(total_h_mask), TS.sum(x_mask)))
 
     def horizontal_step(self, x, x_mask, h_tm1, total_h_tm1, total_h_mask_tm1, x_mask_tm1, bucket_size):
         total_h_mask_next = self.get_next_value_mask(total_h_mask_tm1)

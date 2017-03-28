@@ -16,14 +16,15 @@ class Encoder_Predictor(Encoder_Base):
         super(Encoder_Predictor, self).__init__(**kwargs)
 
     def compute_mask(self, input, input_mask=None):
-        return [None, None, None, None, None]
+        return [None, None, None, None, None, None]
 
     def compute_output_shape(self, input_shape):
         return [(input_shape[0][0], self.hidden_dim),
                 (self.batch_size, self.depth, 1,self.hidden_dim),
                 (self.batch_size, self.depth, 1,self.hidden_dim),
                 (self.batch_size, self.depth, 1, 2),
-                (self.batch_size, self.depth, 1,)]
+                (self.batch_size, self.depth, 1,),
+                (1,)]
 
 
     def call(self, input, mask=None):
@@ -54,9 +55,10 @@ class Encoder_Predictor(Encoder_Base):
         initial_policy_input_x = K.zeros_like(x[1:])
         initial_policy_input_h = K.zeros_like((x[1:]))
         initial_policy_calculated = K.zeros_like(data_mask[1:])
+        initial_depth = K.zeros((1,), dtype="int8")
 
         results, _ = T.scan(self.vertical_step,
-                        outputs_info=[x, data_mask, initial_policy_input_x, initial_policy_input_h, initial_policy, initial_policy_calculated],
+                        outputs_info=[x, data_mask, initial_policy_input_x, initial_policy_input_h, initial_policy, initial_policy_calculated, initial_depth],
                         non_sequences=[bucket_size],
                         n_steps=self.depth-1)
 
@@ -64,6 +66,7 @@ class Encoder_Predictor(Encoder_Base):
         policy_input_h = results[3]
         policy = results[4]
         policy_calculated_mask = results[5]
+        depth = results[6][-1]
 
         x = results[0][-1]
         data_mask = results[1][-1]
@@ -79,9 +82,10 @@ class Encoder_Predictor(Encoder_Base):
                policy_input_x.dimshuffle([2,0,1,3]),
                policy_input_h.dimshuffle([2,0,1,3]),
                policy.dimshuffle([2,0,1,3]),
-               policy_calculated_mask.dimshuffle([2,0,1])]
+               policy_calculated_mask.dimshuffle([2,0,1]),
+               depth]
 
-    def vertical_step(self, x, x_mask, prev_policy_input_x, prev_policy_input_h, prev_policy, prev_policy_calculated, bucket_size):
+    def vertical_step(self, x, x_mask, prev_policy_input_x, prev_policy_input_h, prev_policy, prev_policy_calculated, prev_depth, bucket_size):
         initial_h = x[0]
         initial_total_h = K.zeros_like(x)
         initial_total_h = initial_total_h.dimshuffle([1,0,2])
@@ -103,7 +107,9 @@ class Encoder_Predictor(Encoder_Base):
         policy_input_h = results[5]
         policy = results[6]
 
-        return total_h.dimshuffle([1,0,2]), total_h_mask.dimshuffle([1,0]), policy_input_x, policy_input_h, policy, policy_calculated
+        depth = TS.cast(prev_depth+1, dtype="int8")
+
+        return [total_h.dimshuffle([1,0,2]), total_h_mask.dimshuffle([1,0]), policy_input_x, policy_input_h, policy, policy_calculated, depth], T.scan_module.until(TS.eq(TS.sum(total_h_mask), TS.sum(x_mask)))
 
 
 

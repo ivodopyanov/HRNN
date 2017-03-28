@@ -209,7 +209,7 @@ def build_predictor(data, settings):
     layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
     model = Model(inputs=[data_input, bucket_size_input],
-                  outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4]])
+                  outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5]])
     optimizer = Adam(lr=0.001, clipnorm=5)
     #model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=['accuracy'])
     return model
