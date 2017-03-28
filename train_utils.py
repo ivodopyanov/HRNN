@@ -209,15 +209,13 @@ def run_training_RL_only(data, objects, settings):
             batch = next(objects['data_gen'])
             y_pred = predictor.predict_on_batch(batch[0])
             output = y_pred[0]
-            action = y_pred[1]
-            action_calculated = y_pred[2]
-            x = y_pred[3]
-            h = y_pred[4]
-            policy = y_pred[5]
-            depth = y_pred[6]
-            action1 = y_pred[7]
+            input_x = y_pred[1]
+            input_h = y_pred[2]
+            policy = y_pred[3]
+            policy_calculated = y_pred[4]
+            depth = y_pred[5]
             error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
-            X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
+            X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated)
             loss2 = rl_model.train_on_batch(X,Y)
             loss2_total.append(loss2)
             depth_total.append(depth[0])
@@ -242,14 +240,13 @@ def run_training_RL_only(data, objects, settings):
             loss1 = encoder.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
             y_pred = predictor.predict_on_batch(batch[0])
             output = y_pred[0]
-            action = y_pred[1]
-            action_calculated = y_pred[2]
-            x = y_pred[3]
-            h = y_pred[4]
-            policy = y_pred[5]
-            depth = y_pred[6]
+            input_x = y_pred[1]
+            input_h = y_pred[2]
+            policy = y_pred[3]
+            policy_calculated = y_pred[4]
+            depth = y_pred[5]
             error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
-            X,Y = restore_exp(settings, x, error, h, policy, action_calculated)
+            X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated)
             loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
             loss2_total.append(loss2)
             depth_total.append(depth[0])
