@@ -88,7 +88,7 @@ def init_settings():
     settings['action_dim'] = 64
     settings['dropout_W'] = 0.2
     settings['dropout_U'] = 0.2
-    settings['dropout_action'] = 0.2
+    settings['dropout_action'] = 0.5
     settings['dropout_emb'] = 0.2
     settings['hidden_dims'] = [64]
     settings['dense_dropout'] = 0.5
@@ -288,9 +288,9 @@ def train(filename):
     objects = prepare_objects(data, settings)
     #load(objects, filename)
     sys.stdout.write('Compiling model\n')
-    #run_training2(data, objects, settings)
+    run_training2(data, objects, settings)
     #run_training_encoder_only(data, objects, settings)
-    run_training_RL_only(data, objects, settings)
+    #run_training_RL_only(data, objects, settings)
     #save(objects, filename)
 
 
