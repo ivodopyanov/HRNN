@@ -166,7 +166,7 @@ def build_encoder(data, settings):
     layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
     model = Model(inputs=[data_input, bucket_size_input], outputs=[output])
-    optimizer = Adam(lr=0.001, clipnorm=5)
+    optimizer = Adam()
     model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=['accuracy'])
     return model
 
@@ -210,7 +210,7 @@ def build_predictor(data, settings):
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
     model = Model(inputs=[data_input, bucket_size_input],
                   outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5]])
-    optimizer = Adam(lr=0.001, clipnorm=5)
+    optimizer = Adam()
     #model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=['accuracy'])
     return model
 
@@ -225,7 +225,7 @@ def build_RL_model(settings):
                              l2=settings['l2'],
                              name='encoder')([x_input, h_tm1_input])
     model = Model(inputs=[x_input, h_tm1_input], outputs=[layer])
-    optimizer = Adam(clipnorm=5)
+    optimizer = Adam()
     model.compile(loss='mse', optimizer=optimizer)
     return model
 
