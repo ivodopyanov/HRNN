@@ -32,12 +32,6 @@ class Encoder_RL_Layer(Layer):
         self.b_action_1 = self.add_weight((self.action_dim,),
                                           initializer=zeros(),
                                           name='b_action_2_{}'.format(self.name))
-        self.W_action_2 = self.add_weight((self.action_dim, self.action_dim),
-                                          initializer=glorot_uniform(),
-                                          name='W_action_2_{}'.format(self.name))
-        self.b_action_2 = self.add_weight((self.action_dim,),
-                                          initializer=zeros(),
-                                          name='b_action_2_{}'.format(self.name))
 
         self.W_action_3 = self.add_weight((self.action_dim, 2),
                                           initializer=glorot_uniform(),
@@ -75,7 +69,7 @@ class Encoder_RL_Layer(Layer):
             B_action = K.cast_to_floatx(1.)
 
         policy = activations.relu(K.dot(x*B_W, self.W_action_1) + K.dot(h_tm1*B_U, self.U_action_1) + self.b_action_1)
-        policy = activations.relu(K.dot(policy*B_action, self.W_action_2)+self.b_action_2)
+        #policy = activations.relu(K.dot(policy*B_action, self.W_action_2)+self.b_action_2)
         #policy = K.exp(K.minimum(K.dot(policy*B_action, self.W_action_3)+self.b_action_3,5))
         policy = K.exp(K.dot(policy*B_action, self.W_action_3)+self.b_action_3)
 
