@@ -13,8 +13,7 @@ import utils
 from Encoder.Encoder_Predictor import Encoder_Predictor
 from Encoder.Encoder_Processor import Encoder_Processor
 from Encoder.Encoder_RL_layer import Encoder_RL_Layer
-from Encoder.Encoder_Evo import Encoder_Evo
-from train_utils import run_training2, copy_weights_encoder_to_predictor_wordbased, run_training_encoder_only, run_training_RL_only, run_training_evo
+from train_utils import run_training2, copy_weights_encoder_to_predictor_wordbased, run_training_encoder_only, run_training_RL_only
 
 CASES_FILENAME = "cases.txt"
 QUOTES = ["'", '“', '"']
@@ -120,7 +119,6 @@ def prepare_objects(data, settings):
 
     encoder = build_encoder(data, settings)
     predictor = build_predictor(data, settings)
-    predictor_evo = build_predictor_evo(data, settings)
     rl_model = build_RL_model(settings)
     data_gen = build_generator_HRNN(data, settings, train_indexes)
     val_gen = build_generator_HRNN(data, settings, val_indexes)
@@ -128,7 +126,6 @@ def prepare_objects(data, settings):
     return {'encoder': encoder,
             'predictor': predictor,
             'rl_model': rl_model,
-            'predictor_evo': predictor_evo,
             'data_gen': data_gen,
             'val_gen': val_gen,
             'train_indexes': train_indexes,
@@ -219,47 +216,6 @@ def build_predictor(data, settings):
                   outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5]])
     return model
 
-def build_predictor_evo(data, settings):
-    sys.stdout.write('Building model\n')
-    data_input = Input(shape=(settings['max_len'],))
-    bucket_size_input = Input(shape=(1,),dtype="int32")
-    if 'emb_matrix' in data:
-        embedding = Embedding(input_dim=settings['max_features']+2,
-                          output_dim=settings['word_embedding_size'],
-                          name='emb',
-                          mask_zero=True,
-                          weights=[data['emb_matrix']],
-                          trainable=False)(data_input)
-    else:
-        embedding = Embedding(input_dim=settings['max_features']+2,
-                          output_dim=settings['word_embedding_size'],
-                          name='emb',
-                          mask_zero=True)(data_input)
-    if settings['dropout_emb'] > 0:
-        embedding = SpatialDropout1D(settings['dropout_emb'])(embedding)
-    encoder = Encoder_Evo(input_dim=settings['word_embedding_size'],
-                                hidden_dim=settings['sentence_embedding_size'],
-                                depth=settings['depth'],
-                                action_dim=settings['action_dim'],
-                                batch_size=settings['batch_size'],
-                                max_len=settings['max_len'],
-                                dropout_u=settings['dropout_U'],
-                                dropout_w=settings['dropout_W'],
-                                dropout_action=settings['dropout_action'],
-                                l2=settings['l2'],
-                                sigma=settings['sigma'],
-                                name='encoder')([embedding, bucket_size_input])
-    layer = encoder[0]
-
-    for idx, hidden_dim in enumerate(settings['hidden_dims']):
-        layer = Dropout(settings['dense_dropout'])(layer)
-        layer = Dense(hidden_dim, name='dense_{}'.format(idx))(layer)
-        layer = Activation('tanh')(layer)
-    layer = Dropout(settings['dense_dropout'])(layer)
-    output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(inputs=[data_input, bucket_size_input],
-                  outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6]])
-    return model
 
 def build_RL_model(settings):
     x_input = Input(shape=(settings['sentence_embedding_size'],))
@@ -335,7 +291,7 @@ def train(filename):
     objects = prepare_objects(data, settings)
     #load(objects, filename)
     sys.stdout.write('Compiling model\n')
-    run_training_evo(data, objects, settings)
+    run_training2(data, objects, settings)
     #run_training_encoder_only(data, objects, settings)
     #run_training_RL_only(data, objects, settings)
     #save(objects, filename)

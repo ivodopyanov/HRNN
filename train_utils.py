@@ -172,112 +172,6 @@ def run_training2(data, objects, settings):
                                      np.sum(depth_total)*1.0/len(depth_total)))
 
 
-def run_training_evo(data, objects, settings):
-    encoder = objects['encoder']
-    predictor_evo = objects['predictor_evo']
-    epoch_size = int(len(objects['train_indexes'])/(settings['epoch_mult']*settings['batch_size']))
-    val_epoch_size = int(len(objects['val_indexes'])/(1*settings['batch_size']))
-
-    sys.stdout.write("\nTrain epoch size = {}; val epoch size = {}".format(epoch_size, val_epoch_size))
-
-    for epoch in range(settings['epochs']):
-        sys.stdout.write("\n\nEpoch {}\n".format(epoch+1))
-        loss1_total = []
-        acc_total = []
-        depth_total = []
-        for j in range(epoch_size):
-            batch = next(objects['data_gen'])
-            loss1 = encoder.train_on_batch(batch[0], batch[1])
-            loss1_total.append(loss1[0])
-            acc_total.append(loss1[2])
-
-            settings['copy_etp'](objects)
-
-
-            W1 = K.get_value(predictor_evo.get_layer('encoder').W_action_1)
-            U1 = K.get_value(predictor_evo.get_layer('encoder').U_action_1)
-            b1 = K.get_value(predictor_evo.get_layer('encoder').b_action_1)
-            W3 = K.get_value(predictor_evo.get_layer('encoder').W_action_3)
-            b3 = K.get_value(predictor_evo.get_layer('encoder').b_action_3)
-
-            N_W1 = np.zeros((settings['npop'], settings['sentence_embedding_size'], settings['action_dim']), dtype=W1.dtype)
-            N_U1 = np.zeros((settings['npop'], settings['action_dim'], settings['action_dim']), dtype=U1.dtype)
-            N_b1 = np.zeros((settings['npop'], settings['action_dim']), dtype=b1.dtype)
-            N_W3 = np.zeros((settings['npop'], settings['action_dim'], 2), dtype=W3.dtype)
-            N_b3 = np.zeros((settings['npop'], 2), dtype=b3.dtype)
-            R = np.zeros(settings['npop'], dtype=W1.dtype)
-
-            for k in range(settings['npop']):
-                y_pred = predictor_evo.predict_on_batch(batch[0])
-                output = y_pred[0]
-                W_action_1_rnd = y_pred[1]
-                U_action_1_rnd = y_pred[2]
-                b_action_1_rnd = y_pred[3]
-                W_action_3_rnd = y_pred[4]
-                b_action_3_rnd = y_pred[5]
-                depth = y_pred[6]
-
-                N_W1[k] = W_action_1_rnd
-                N_U1[k] = U_action_1_rnd
-                N_b1[k] = b_action_1_rnd
-                N_W3[k] = W_action_3_rnd
-                N_b3[k] = b_action_3_rnd
-                R[k] = np.average(np.log(np.sum(output*batch[1], axis=1)))
-                depth_total.append(depth[0])
-
-            if np.std(R) == 0:
-                A = np.ones_like(R)
-            else:
-                A = (R - np.mean(R)) / np.std(R)
-            W1_update = settings['alpha']/(settings['npop']*settings['sigma'])*np.dot(N_W1.T, A)
-            U1_update = settings['alpha']/(settings['npop']*settings['sigma'])*np.dot(N_U1.T, A)
-            b1_update = settings['alpha']/(settings['npop']*settings['sigma'])*np.dot(N_b1.T, A)
-            W3_update = settings['alpha']/(settings['npop']*settings['sigma'])*np.dot(N_W3.T, A)
-            b3_update = settings['alpha']/(settings['npop']*settings['sigma'])*np.dot(N_b3.T, A)
-
-            predictor_evo.get_layer('encoder').W_action_1.set_value(W1+W1_update.T)
-            predictor_evo.get_layer('encoder').U_action_1.set_value(U1+U1_update.T)
-            predictor_evo.get_layer('encoder').b_action_1.set_value(b1+b1_update.T)
-            predictor_evo.get_layer('encoder').W_action_3.set_value(W3+W3_update.T)
-            predictor_evo.get_layer('encoder').b_action_3.set_value(b3+b3_update.T)
-
-            copy_weights_predictor_evo_to_encoder(objects)
-
-            if len(loss1_total) == 0:
-                avg_loss1 = 0
-            else:
-                avg_loss1 = np.sum(loss1_total)*1.0/len(loss1_total)
-            if len(acc_total) == 0:
-                avg_acc = 0
-            else:
-                avg_acc = np.sum(acc_total)*1.0/len(acc_total)
-            if len(depth_total) == 0:
-                avg_depth = 0
-            else:
-                avg_depth = np.sum(depth_total)*1.0/len(depth_total)
-
-            copy_weights_rl_to_encoder(objects)
-
-            sys.stdout.write("\r batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, depth = {:.4f}"
-                         .format(j+1, epoch_size,
-                                 avg_loss1, avg_acc, avg_depth))
-
-
-        sys.stdout.write("\n")
-        loss1_total = []
-        acc_total = []
-        for i in range(val_epoch_size):
-            batch = next(objects['val_gen'])
-            loss1 = encoder.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
-
-            loss1_total.append(loss1[0])
-            acc_total.append(loss1[2])
-            sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}"
-                             .format(i+1, val_epoch_size,
-                                     np.sum(loss1_total)*1.0/len(loss1_total),
-                                     np.sum(acc_total)*1.0/len(acc_total)))
-
-
 
 
 def run_training_encoder_only(data, objects, settings):
@@ -395,7 +289,10 @@ def run_training_RL_only(data, objects, settings):
                                      np.sum(depth_total)*1.0/len(depth_total)))
 
 def restore_exp(settings, x, total_error, h, policy, fk_calculated):
+    depth_mult = np.logspace(fk_calculated.shape[1]-1, 0, num=fk_calculated.shape[1], base=0.9)
+    depth_mult = np.repeat(np.expand_dims(depth_mult, axis=0), fk_calculated.shape[0], axis=0)
     error_mult = np.repeat(np.expand_dims(total_error, axis=1), fk_calculated.shape[1], axis=1)
+    error_mult = error_mult * depth_mult
     error_mult = np.repeat(np.expand_dims(error_mult, axis=2), fk_calculated.shape[2], axis=2)
     chosen_action = np.less_equal(policy[:,:,:,0], policy[:,:,:,1])
     shift_action_mask = np.ones_like(error_mult)*chosen_action
