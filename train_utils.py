@@ -92,7 +92,7 @@ def run_training2(data, objects, settings):
             batch = next(objects['data_gen'])
             loss1 = encoder.train_on_batch(batch[0], batch[1])
             loss1_total.append(loss1[0])
-            acc_total.append(loss1[1])
+            acc_total.append(loss1[2])
 
             settings['copy_etp'](objects)
 
@@ -162,7 +162,7 @@ def run_training2(data, objects, settings):
 
             loss2_total.append(loss2)
             loss1_total.append(loss1[0])
-            acc_total.append(loss1[1])
+            acc_total.append(loss1[2])
             depth_total.append(depth[0])
             sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, depth = {:.4f}"
                              .format(i+1, val_epoch_size,
