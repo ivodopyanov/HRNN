@@ -86,12 +86,12 @@ def init_settings():
     settings['sentence_embedding_size'] = 64
     settings['depth'] = 6
     settings['action_dim'] = 64
-    settings['dropout_W'] = 0.2
-    settings['dropout_U'] = 0.2
-    settings['dropout_action'] = 0.5
-    settings['dropout_emb'] = 0.2
+    settings['dropout_W'] = 0.0
+    settings['dropout_U'] = 0.0
+    settings['dropout_action'] = 0.0
+    settings['dropout_emb'] = 0.0
     settings['hidden_dims'] = [64]
-    settings['dense_dropout'] = 0.5
+    settings['dense_dropout'] = 0.0
     settings['bucket_size_step'] = 4
     settings['batch_size'] = 6
     settings['max_len'] = 128
@@ -102,10 +102,7 @@ def init_settings():
     settings['copy_etp'] = copy_weights_encoder_to_predictor_wordbased
     settings['with_embedding'] = False
     settings['l2'] = 0.00001
-    settings['epoch_mult'] = 1
-    settings['sigma'] = 0.1
-    settings['npop'] = 50
-    settings['alpha'] = 0.001
+    settings['epoch_mult'] = 10
     return settings
 
 def prepare_objects(data, settings):
@@ -213,7 +210,7 @@ def build_predictor(data, settings):
     layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
     model = Model(inputs=[data_input, bucket_size_input],
-                  outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5]])
+                  outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6]])
     return model
 
 
@@ -291,9 +288,9 @@ def train(filename):
     objects = prepare_objects(data, settings)
     #load(objects, filename)
     sys.stdout.write('Compiling model\n')
-    run_training2(data, objects, settings)
+    #run_training2(data, objects, settings)
     #run_training_encoder_only(data, objects, settings)
-    #run_training_RL_only(data, objects, settings)
+    run_training_RL_only(data, objects, settings)
     #save(objects, filename)
 
 

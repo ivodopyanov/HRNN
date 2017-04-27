@@ -103,11 +103,12 @@ def run_training2(data, objects, settings):
             input_h = y_pred[2]
             policy = y_pred[3]
             policy_calculated = y_pred[4]
-            depth = y_pred[5]
+            chosen_action = y_pred[5]
+            depth = y_pred[6]
 
             #error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
             error = -np.log(np.sum(output*batch[1], axis=1))
-            X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated)
+            X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action)
             loss2 = rl_model.train_on_batch(X,Y)
 
             loss2_total.append(loss2)
@@ -240,10 +241,11 @@ def run_training_RL_only(data, objects, settings):
             input_h = y_pred[2]
             policy = y_pred[3]
             policy_calculated = y_pred[4]
-            depth = y_pred[5]
-            #error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
-            error = -np.log(np.sum(output*batch[1], axis=1))
-            X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated)
+            chosen_action = y_pred[5]
+            depth = y_pred[6]
+            error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
+            #error = -np.log(np.sum(output*batch[1], axis=1))
+            X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action)
             loss2 = rl_model.train_on_batch(X,Y)
             loss2_total.append(loss2)
             depth_total.append(depth[0])
@@ -288,13 +290,13 @@ def run_training_RL_only(data, objects, settings):
                                      np.sum(loss2_total)*1.0/len(loss2_total),
                                      np.sum(depth_total)*1.0/len(depth_total)))
 
-def restore_exp(settings, x, total_error, h, policy, fk_calculated):
+def restore_exp(settings, x, total_error, h, policy, fk_calculated, chosen_action):
     depth_mult = np.logspace(fk_calculated.shape[1]-1, 0, num=fk_calculated.shape[1], base=0.9)
     depth_mult = np.repeat(np.expand_dims(depth_mult, axis=0), fk_calculated.shape[0], axis=0)
     error_mult = np.repeat(np.expand_dims(total_error, axis=1), fk_calculated.shape[1], axis=1)
     error_mult = error_mult * depth_mult
     error_mult = np.repeat(np.expand_dims(error_mult, axis=2), fk_calculated.shape[2], axis=2)
-    chosen_action = np.less_equal(policy[:,:,:,0], policy[:,:,:,1])
+    #chosen_action = np.less_equal(policy[:,:,:,0], policy[:,:,:,1])
     shift_action_mask = np.ones_like(error_mult)*chosen_action
     reduce_action_mask = np.ones_like(error_mult)*(1-chosen_action)
     shift_action_policy = np.concatenate((np.expand_dims(shift_action_mask*error_mult, axis=3), np.expand_dims(policy[:,:,:,1], axis=3)), axis=3)
