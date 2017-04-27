@@ -18,8 +18,6 @@ class Encoder_Processor(Encoder_Base):
     def __init__(self, **kwargs):
         super(Encoder_Processor, self).__init__(**kwargs)
 
-
-
     def compute_mask(self, input, input_mask=None):
         return [None, None]
 

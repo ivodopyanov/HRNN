@@ -77,6 +77,7 @@ def run_training2(data, objects, settings):
     encoder = objects['encoder']
     predictor = objects['predictor']
     rl_model = objects['rl_model']
+    predictor._make_predict_function()
     epoch_size = int(len(objects['train_indexes'])/(settings['epoch_mult']*settings['batch_size']))
     val_epoch_size = int(len(objects['val_indexes'])/(1*settings['batch_size']))
 
@@ -96,7 +97,8 @@ def run_training2(data, objects, settings):
 
             settings['copy_etp'](objects)
 
-            y_pred = predictor.predict_on_batch(batch[0])
+            ins = batch[0] + [1.]
+            y_pred = predictor.predict_function(ins)
 
             output = y_pred[0]
             input_x = y_pred[1]
@@ -227,6 +229,7 @@ def run_training_RL_only(data, objects, settings):
     encoder = objects['encoder']
     predictor = objects['predictor']
     rl_model = objects['rl_model']
+    predictor._make_predict_function()
     epoch_size = int(len(objects['train_indexes'])/(settings['epoch_mult']*settings['batch_size']))
     val_epoch_size = int(len(objects['val_indexes'])/(1*settings['batch_size']))
     sys.stdout.write("\nTrain epoch size = {}; val epoch size = {}".format(epoch_size, val_epoch_size))
@@ -236,7 +239,8 @@ def run_training_RL_only(data, objects, settings):
         depth_total = []
         for j in range(epoch_size):
             batch = next(objects['data_gen'])
-            y_pred = predictor.predict_on_batch(batch[0])
+            ins = batch[0] + [1.]
+            y_pred = predictor.predict_function(ins)
             output = y_pred[0]
             input_x = y_pred[1]
             input_h = y_pred[2]

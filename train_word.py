@@ -86,7 +86,7 @@ def init_settings():
     settings['sentence_embedding_size'] = 64
     settings['depth'] = 6
     settings['action_dim'] = 64
-    settings['dropout_W'] = 0.0
+    settings['dropout_W'] = 0.2
     settings['dropout_U'] = 0.0
     settings['dropout_action'] = 0.0
     settings['dropout_emb'] = 0.0
@@ -98,7 +98,7 @@ def init_settings():
     settings['max_features']=10000
     settings['with_sentences']=False
     settings['epochs'] = 50
-    settings['random_action_prob'] = 0
+    settings['random_action_prob'] = 0.3
     settings['copy_etp'] = copy_weights_encoder_to_predictor_wordbased
     settings['with_embedding'] = False
     settings['l2'] = 0.00001
@@ -288,9 +288,9 @@ def train(filename):
     objects = prepare_objects(data, settings)
     #load(objects, filename)
     sys.stdout.write('Compiling model\n')
-    #run_training2(data, objects, settings)
+    run_training2(data, objects, settings)
     #run_training_encoder_only(data, objects, settings)
-    run_training_RL_only(data, objects, settings)
+    #run_training_RL_only(data, objects, settings)
     #save(objects, filename)
 
 

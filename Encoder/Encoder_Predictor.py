@@ -13,6 +13,7 @@ from Encoder.Encoder_Base import Encoder_Base
 class Encoder_Predictor(Encoder_Base):
     def __init__(self, random_action_prob, **kwargs):
         self.random_action_prob = random_action_prob
+        self.uses_learning_phase = True
         super(Encoder_Predictor, self).__init__(**kwargs)
 
     def compute_mask(self, input, input_mask=None):
@@ -146,6 +147,7 @@ class Encoder_Predictor(Encoder_Base):
         chosen_action = K.switch(TS.le(policy[:,0], policy[:, 1]), 1, 0)
 
         use_random_action = K.random_binomial((self.batch_size,), self.random_action_prob)
+        use_random_action = K.in_train_phase(use_random_action, K.zeros((self.batch_size)))
         random_action = K.random_uniform((self.batch_size,)) >= 0.5
         chosen_action = K.switch(use_random_action, random_action, chosen_action)
 
