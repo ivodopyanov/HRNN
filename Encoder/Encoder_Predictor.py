@@ -134,7 +134,7 @@ class Encoder_Predictor(Encoder_Base):
             B_action = K.cast_to_floatx(1.)
 
         policy = activations.relu(K.dot(x*B_W, self.W_action_1) + K.dot(h_tm1*B_U, self.U_action_1) + self.b_action_1)
-        policy = K.exp(K.dot(policy*B_action, self.W_action_3)+self.b_action_3)
+        policy = K.exp(K.minimum(K.dot(policy*B_action, self.W_action_3)+self.b_action_3,5))
 
         continue_accumulation = K.switch(TS.le(policy[:,0], policy[:, 1]), 1, 0)
         continue_accumulation = K.switch(x_mask_tm1*(1-x_mask), 0, continue_accumulation)
