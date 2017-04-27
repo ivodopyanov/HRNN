@@ -155,10 +155,11 @@ def run_training2(data, objects, settings):
             input_h = y_pred[2]
             policy = y_pred[3]
             policy_calculated = y_pred[4]
-            depth = y_pred[5]
+            chosen_action = y_pred[5]
+            depth = y_pred[6]
             error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
             #error = -np.log(np.sum(output*batch[1], axis=1))
-            X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated)
+            X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action)
             loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
 
             loss2_total.append(loss2)
