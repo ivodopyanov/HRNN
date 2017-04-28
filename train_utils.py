@@ -91,14 +91,22 @@ def run_training2(data, objects, settings):
         depth_total = []
         for j in range(epoch_size):
             batch = next(objects['data_gen'])
-            loss1 = encoder.train_on_batch(batch[0], batch[1])
+            try:
+                loss1 = encoder.train_on_batch(batch[0], batch[1])
+            except ValueError:
+                sys.stdout.write("ValueError!\n")
+                continue
             loss1_total.append(loss1[0])
             acc_total.append(loss1[2])
 
             settings['copy_etp'](objects)
 
             ins = batch[0] + [1.]
-            y_pred = predictor.predict_function(ins)
+            try:
+                y_pred = predictor.predict_function(ins)
+            except ValueError:
+                sys.stdout.write("ValueError2!\n")
+                continue
 
             output = y_pred[0]
             input_x = y_pred[1]
@@ -149,8 +157,12 @@ def run_training2(data, objects, settings):
         depth_total = []
         for i in range(val_epoch_size):
             batch = next(objects['val_gen'])
-            loss1 = encoder.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
-            y_pred = predictor.predict_on_batch(batch[0])
+            try:
+                loss1 = encoder.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
+                y_pred = predictor.predict_on_batch(batch[0])
+            except ValueError:
+                sys.stdout.write("ValueError3!\n")
+                continue
 
             output = y_pred[0]
             input_x = y_pred[1]
@@ -288,7 +300,7 @@ def run_training_RL_only(data, objects, settings):
             loss2_total.append(loss2)
             depth_total.append(depth[0])
             loss1_total.append(loss1[0])
-            acc_total.append(loss1[1])
+            acc_total.append(loss1[2])
             sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, avg depth = {:.2f}"
                              .format(i+1, val_epoch_size,
                                      np.sum(loss1_total)*1.0/len(loss1_total),

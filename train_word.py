@@ -296,8 +296,3 @@ def train(filename):
 
 if __name__=="__main__":
     train("model")
-
-
-
-
-
