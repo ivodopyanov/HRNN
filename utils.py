@@ -28,7 +28,7 @@ def load_char_corpus(freq_limit):
         char_counts = f.readlines()
     char_counts = [int(s.strip()) for s in char_counts]
     total_char_count = sum(char_counts)
-    char_freqs = [(char_counts[i]/total_char_count, all_chars[i]) for i in range(len(all_chars))]
+    char_freqs = [(char_counts[i]*1.0/total_char_count, all_chars[i]) for i in range(len(all_chars))]
     char_corpus_decode = [char_freq[1] for char_freq in char_freqs if char_freq[0] > freq_limit]
     char_corpus_decode.sort()
     char_corpus_encode = {}
@@ -48,10 +48,13 @@ def load_word_corpus(max_features):
     cnt = Counter(dict(zip(all_words, word_counts)))
     word_corpus_decode = []
     word_corpus_encode = {}
+    mean = 0
     for idx, w in enumerate(cnt.most_common(max_features)):
         word_corpus_decode.append(w[0])
         word_corpus_encode[w[0]] = idx
-    return word_corpus_encode, word_corpus_decode
+        mean += w[1]
+    mean = mean*1.0 / max_features
+    return word_corpus_encode, word_corpus_decode, cnt, mean
 
 
 def split_sentence_to_words(sentence):
