@@ -134,30 +134,29 @@ class Encoder(Layer):
         is_end_tm1_for_h = K.repeat_elements(is_end_tm1_for_h, self.units, 1)
         h_tm1 = K.switch(is_end_tm1_for_h, 0, h_tm1)
 
-        h = self.gru_step(x, h_tm1, B_W, B_U)
+        h = self.gru_step(x, h_tm1, B_W, B_U, self.W, self.U, self.b, self.gammas, self.betas, self.units)
         x_mask_for_h = K.expand_dims(x_mask)
         x_mask_for_h = K.repeat_elements(x_mask_for_h, self.units, 1)
         h = K.switch(x_mask_for_h, h, h_tm1)
-        h_ep = self.gru_step(x, h_ep_tm1, B_W_ep, B_U_ep)
+
+        h_ep = self.gru_step(x, h_ep_tm1, B_W_ep, B_U_ep, self.W_EP, self.U_EP, self.b_EP, self.gammas_EP, self.betas_EP, self.units_ep)
         x_mask_for_h_ep = K.expand_dims(x_mask)
         x_mask_for_h_ep = K.repeat_elements(x_mask_for_h_ep, self.units_ep, 1)
         h_ep = K.switch(x_mask_for_h_ep, h_ep, h_ep_tm1)
         is_end = K.sigmoid(K.dot(h_ep_tm1, self.W1_EP) + self.b1_EP)
-        is_end = Print("is_end")(is_end)
         is_end = K.round(is_end)
-        is_end = Print("is_end2")(is_end)
         is_end = K.flatten(is_end)
-        is_end = Print("is_end3")(is_end)
+        is_end = Print("is_end")(is_end)
 
         return h, h_ep, is_end
 
-    def gru_step(self, x, h_tm1, B_W, B_U):
-        s1 = self.ln(K.dot(x*B_W, self.W) + self.b, self.gammas[0], self.betas[0])
-        s2 = self.ln(K.dot(h_tm1*B_U, self.U[:,:2*self.units]), self.gammas[1,:2*self.units], self.betas[1,:2*self.units])
-        s = K.hard_sigmoid(s1[:,:2*self.units] + s2)
-        z = s[:,:self.units]
-        r = s[:,self.units:2*self.units]
-        h_ = z*h_tm1 + (1-z)*K.tanh(s1[:,2*self.units:] + self.ln(K.dot(r*h_tm1*B_U, self.U[:,2*self.units:]), self.gammas[1,2*self.units:], self.betas[1,2*self.units:]))
+    def gru_step(self, x, h_tm1, B_W, B_U, W, U, b, gammas, betas, dim):
+        s1 = self.ln(K.dot(x*B_W, W) + b, gammas[0], betas[0])
+        s2 = self.ln(K.dot(h_tm1*B_U, U[:,:2*dim]), gammas[1,:2*dim], betas[1,:2*dim])
+        s = K.hard_sigmoid(s1[:,:2*dim] + s2)
+        z = s[:,:dim]
+        r = s[:,dim:2*dim]
+        h_ = z*h_tm1 + (1-z)*K.tanh(s1[:,2*dim:] + self.ln(K.dot(r*h_tm1*B_U, U[:,2*dim:]), gammas[1,2*dim:], betas[1,2*dim:]))
         return h_
 
 

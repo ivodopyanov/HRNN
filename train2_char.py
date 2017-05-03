@@ -8,6 +8,7 @@ from keras.layers import Dense, Input, GRU, RepeatVector, Masking, Activation
 from keras.models import Model
 from keras.layers.wrappers import TimeDistributed
 from keras.optimizers import Adam
+import keras.backend as K
 from Encoder2.End_Predictor import EndPredictor
 from Encoder2.Encoder import Encoder
 from Encoder2.Unmask import Unmask
@@ -65,8 +66,8 @@ def build_generator(data, settings, indexes):
             bucket.append((sentence, label))
             if len(bucket)==settings['batch_size']:
                 X, Y = build_batch(data, settings, bucket)
+                yield [X, Y, bucket]
                 bucket = []
-                yield [X, Y]
     return generator()
 
 def build_model_end_detector(data, settings):
@@ -102,13 +103,14 @@ def build_model(data, settings, end_detection_model):
     model = Model(inputs=data_input, outputs=hidden)
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
-    model.layers[2].W_EP=end_detection_model.layers[2].W
-    model.layers[2].U_EP=end_detection_model.layers[2].U
-    model.layers[2].b_EP=end_detection_model.layers[2].b
-    model.layers[2].gammas_EP=end_detection_model.layers[2].gammas
-    model.layers[2].betas_EP=end_detection_model.layers[2].betas
-    model.layers[2].W1_EP=end_detection_model.layers[2].W1
-    model.layers[2].b1_EP=end_detection_model.layers[2].b1
+    model.layers[2].W_EP.set_value(K.get_value(end_detection_model.layers[2].W))
+    model.layers[2].U_EP.set_value(K.get_value(end_detection_model.layers[2].U))
+    model.layers[2].b_EP.set_value(K.get_value(end_detection_model.layers[2].b))
+    model.layers[2].gammas_EP.set_value(K.get_value(end_detection_model.layers[2].gammas))
+    model.layers[2].betas_EP.set_value(K.get_value(end_detection_model.layers[2].betas))
+    model.layers[2].W1_EP.set_value(K.get_value(end_detection_model.layers[2].W1))
+    model.layers[2].b1_EP.set_value(K.get_value(end_detection_model.layers[2].b1))
+
     return model
 
 def prepare_objects(data, settings):
@@ -121,7 +123,7 @@ def prepare_objects(data, settings):
     val_indexes = indexes[train_segment:]
 
     end_detector_model = build_model_end_detector(data, settings)
-    #end_detector_model.load_weights("train2char_end_detector")
+    end_detector_model.load_weights("train2char_end_detector.h5")
     model = build_model(data, settings, end_detector_model)
     data_gen = build_generator(data, settings, train_indexes)
     val_gen = build_generator(data, settings, val_indexes)
@@ -148,7 +150,7 @@ def build_batch(data, settings, sentence_batch):
         Y[i][data['labels'].index(sentence_tuple[1])] = True
     return X, Y
 
-def run_training_end_detector(data, objects, settings):
+def run_training(data, objects, settings):
     model = objects['model']
     epoch_size = int(len(objects['train_indexes'])*1.0/(settings['epoch_mult']*settings['batch_size']))
     val_epoch_size = int(len(objects['val_indexes'])*1.0/(1*settings['batch_size']))
@@ -156,36 +158,48 @@ def run_training_end_detector(data, objects, settings):
     for epoch in range(settings['epochs']):
         sys.stdout.write("\n\nEpoch {}\n".format(epoch+1))
         loss_total = []
+        acc_total = []
         for j in range(epoch_size):
-            X, Y = next(objects['data_gen'])
+            X, Y, sentences = next(objects['data_gen'])
             loss = model.train_on_batch(X, Y)
-            loss_total.append(loss)
+            loss_total.append(loss[0])
+            acc_total.append(loss[1])
             if len(loss_total) == 0:
                 avg_loss = 0
             else:
                 avg_loss = np.sum(loss_total)*1.0/len(loss_total)
-            sys.stdout.write("\rTraining batch {} / {}: loss = {:.4f}"
-                         .format(j+1, epoch_size, avg_loss))
+            if len(acc_total) == 0:
+                avg_acc = 0
+            else:
+                avg_acc = np.sum(acc_total)*1.0/len(acc_total)
+            sys.stdout.write("\rTraining batch {} / {}: loss = {:.4f}, acc = {:.4f}"
+                         .format(j+1, epoch_size, avg_loss, avg_acc))
         loss_total = []
+        acc_total = []
         sys.stdout.write("\n")
         for i in range(val_epoch_size):
             X, Y = next(objects['val_gen'])
             loss = model.evaluate(X, Y, batch_size=settings['batch_size'], verbose=0)
-            loss_total.append(loss)
+            loss_total.append(loss[0])
+            acc_total.append(loss[1])
             if len(loss_total) == 0:
                 avg_loss = 0
             else:
                 avg_loss = np.sum(loss_total)*1.0/len(loss_total)
+            if len(acc_total) == 0:
+                avg_acc = 0
+            else:
+                avg_acc = np.sum(acc_total)*1.0/len(acc_total)
 
-            sys.stdout.write("\rTesting batch {} / {}: loss = {:.4f}"
-                         .format(i+1, val_epoch_size, avg_loss))
+            sys.stdout.write("\rTesting batch {} / {}: loss = {:.4f}, acc = {:.4f}"
+                         .format(i+1, val_epoch_size, avg_loss, avg_acc))
 
 
 def train():
     settings = init_settings()
     data, settings = get_data(settings)
     objects = prepare_objects(data, settings)
-    run_training_end_detector(data, objects, settings)
+    run_training(data, objects, settings)
     objects['model'].save_weights("train2char.h5")
 
 def test():

@@ -40,9 +40,10 @@ def build_generator(data, settings, indexes):
                 np.random.shuffle(walk_order)
             bucket.append(word)
             if len(bucket)==settings['batch_size']:
-                X, Y, sample_weights = build_batch(data, settings, bucket)
+                X, Y, sample_weights, words = build_batch(data, settings, bucket)
+
                 bucket = []
-                yield [X, Y, sample_weights]
+                yield [X, Y, sample_weights, words]
     return generator()
 
 def build_model_end_detector(data, settings):
@@ -80,6 +81,7 @@ def build_batch(data, settings, words):
     X = np.zeros((settings['batch_size'], settings['max_len'], data['char_count']))
     Y = np.zeros((settings['batch_size'], 1))
     sample_weights = np.zeros((settings['batch_size']))
+    result_words = []
     for i, word in enumerate(words):
         full_word = randint(0,1)
         if full_word == 1:
@@ -87,6 +89,7 @@ def build_batch(data, settings, words):
         else:
             word_length = randint(0, len(word)-1)
         Y[i][0]= full_word
+        result_words.append(word[0:word_length])
         sample_weights[i] = data['word_freq'][word] / data['word_freq_base']
         result_ch_pos = 0
         for ch_pos in range(word_length):
@@ -97,7 +100,7 @@ def build_batch(data, settings, words):
             result_ch_pos += 1
             if result_ch_pos == settings['max_len']-2:
                 break
-    return X, Y, sample_weights
+    return X, Y, sample_weights, result_words
 
 def run_training_end_detector(data, objects, settings):
     model = objects['end_detector_model']
@@ -158,12 +161,11 @@ def test():
     objects = prepare_objects(data, settings)
     objects['end_detector_model'].load_weights('train2char_end_detector.h5')
     while True:
-        s = raw_input("Print char:")
-        X, Y_true, sample_weights = build_batch(data, settings, [s])
+        X, Y, sample_weights, words = next(objects['data_gen'])
         Y_pred = objects['end_detector_model'].predict_on_batch(X)
         pass
 
 
 
 if __name__=="__main__":
-    train()
+    test()

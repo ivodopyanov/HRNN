@@ -2,7 +2,7 @@
 
 def init_settings():
     result = {}
-    result['max_features'] = 20000
+    result['max_features'] = 30000
     result['batch_size']=8
     result['max_len'] = 64
     result['epoch_mult']=1
