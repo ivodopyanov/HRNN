@@ -56,7 +56,7 @@ def build_model_end_detector(data, settings):
                                  dropout_w=settings['dropout_w'],
                                  batch_size=settings['batch_size'])(masking)
     model = Model(inputs=data_input, outputs=end_predictor)
-    model.compile(optimizer='adam', loss='mse')
+    model.compile(optimizer='adam', loss='mse', metrics=['binary_accuracy'])
     return model
 
 def prepare_objects(data, settings):
@@ -107,30 +107,42 @@ def run_training_end_detector(data, objects, settings):
     for epoch in range(settings['epochs']):
         sys.stdout.write("\n\nEpoch {}\n".format(epoch+1))
         loss_total = []
+        acc_total = []
         for j in range(epoch_size):
             X, Y, sample_weights = next(objects['data_gen'])
             loss = model.train_on_batch(X, Y, sample_weight=sample_weights)
-            loss_total.append(loss)
+            loss_total.append(loss[0])
+            acc_total.append(loss[1])
             if len(loss_total) == 0:
                 avg_loss = 0
             else:
                 avg_loss = np.sum(loss_total)*1.0/len(loss_total)
+            if len(acc_total) == 0:
+                avg_acc = 0
+            else:
+                avg_acc = np.sum(acc_total)*1.0/len(acc_total)
 
-            sys.stdout.write("\rTraining batch {} / {}: loss = {:.4f}"
-                         .format(j+1, epoch_size, avg_loss))
+            sys.stdout.write("\rTraining batch {} / {}: loss = {:.4f}, acc = {:.4f}"
+                         .format(j+1, epoch_size, avg_loss, avg_acc))
         loss_total = []
+        acc_total = []
         sys.stdout.write("\n")
         for i in range(val_epoch_size):
             X, Y, sample_weights = next(objects['val_gen'])
             loss = model.evaluate(X, Y, batch_size=settings['batch_size'], verbose=0, sample_weight=sample_weights)
-            loss_total.append(loss)
+            loss_total.append(loss[0])
+            acc_total.append(loss[1])
             if len(loss_total) == 0:
                 avg_loss = 0
             else:
                 avg_loss = np.sum(loss_total)*1.0/len(loss_total)
+            if len(acc_total) == 0:
+                avg_acc = 0
+            else:
+                avg_acc = np.sum(acc_total)*1.0/len(acc_total)
 
-            sys.stdout.write("\rTesting batch {} / {}: loss = {:.4f}"
-                         .format(i+1, val_epoch_size, avg_loss))
+            sys.stdout.write("\rTesting batch {} / {}: loss = {:.4f}, acc  ={:.4f}"
+                         .format(i+1, val_epoch_size, avg_loss, avg_acc))
 
 
 def train():
