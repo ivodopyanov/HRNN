@@ -23,55 +23,55 @@ class Encoder(Layer):
         super(Encoder, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        self.W = self.add_weight((self.input_dim, 3*self.units),
+        self.W = self.add_weight(shape=(self.input_dim, 3*self.units),
                                  initializer=glorot_uniform(),
                                  regularizer=l2(self.l2),
-                                 name='W_{}'.format(self.name))
-        self.U = self.add_weight((self.units, 3*self.units),
+                                 name='W')
+        self.U = self.add_weight(shape=(self.units, 3*self.units),
                                  initializer=orthogonal(),
                                  regularizer=l2(self.l2),
-                                 name='U_{}'.format(self.name))
-        self.b = self.add_weight((3*self.units),
+                                 name='U')
+        self.b = self.add_weight(shape=(3*self.units),
                                  initializer=zeros(),
-                                 name='b_{}'.format(self.name))
-        self.gammas = self.add_weight((2, 3*self.units,),
+                                 name='b')
+        self.gammas = self.add_weight(shape=(2, 3*self.units,),
                                       initializer=zeros(),
-                                      name='gammas_{}'.format(self.name))
-        self.betas = self.add_weight((2, 3*self.units,),
+                                      name='gammas')
+        self.betas = self.add_weight(shape=(2, 3*self.units,),
                                      initializer=zeros(),
-                                     name='betas_{}'.format(self.name))
+                                     name='betas')
 
-        self.W_EP = self.add_weight((self.input_dim, 3*self.units_ep),
+        self.W_EP = self.add_weight(shape=(self.input_dim, 3*self.units_ep),
                                     trainable=False,
                                  initializer=glorot_uniform(),
                                  regularizer=l2(self.l2),
-                                 name='W_EP_{}'.format(self.name))
-        self.U_EP = self.add_weight((self.units_ep, 3*self.units_ep),
+                                 name='W_EP')
+        self.U_EP = self.add_weight(shape=(self.units_ep, 3*self.units_ep),
                                     trainable=False,
                                  initializer=orthogonal(),
                                  regularizer=l2(self.l2),
-                                 name='U_EP_{}'.format(self.name))
-        self.b_EP = self.add_weight((3*self.units_ep),
+                                 name='U_EP')
+        self.b_EP = self.add_weight(shape=(3*self.units_ep),
                                     trainable=False,
                                  initializer=zeros(),
-                                 name='b_EP_{}'.format(self.name))
-        self.gammas_EP = self.add_weight((2, 3*self.units_ep,),
+                                 name='b_EP')
+        self.gammas_EP = self.add_weight(shape=(2, 3*self.units_ep,),
                                          trainable=False,
                                       initializer=zeros(),
-                                      name='gammas_EP_{}'.format(self.name))
-        self.betas_EP = self.add_weight((2, 3*self.units_ep,),
+                                      name='gammas_EP')
+        self.betas_EP = self.add_weight(shape=(2, 3*self.units_ep,),
                                         trainable=False,
                                      initializer=zeros(),
-                                     name='betas_EP_{}'.format(self.name))
-        self.W1_EP = self.add_weight((self.units_ep, 1),
+                                     name='betas_EP')
+        self.W1_EP = self.add_weight(shape=(self.units_ep, 1),
                                      trainable=False,
                                   initializer=glorot_uniform(),
                                   regularizer=l2(self.l2),
-                                  name='W1_EP_{}'.format(self.name))
-        self.b1_EP = self.add_weight((1),
+                                  name='W1_EP')
+        self.b1_EP = self.add_weight(shape=(1),
                                      trainable=False,
                                  initializer=zeros(),
-                                 name='b1_EP_{}'.format(self.name))
+                                 name='b1_EP')
 
         self.built = True
 

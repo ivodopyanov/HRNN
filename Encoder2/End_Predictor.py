@@ -24,31 +24,31 @@ class EndPredictor(Layer):
         self.supports_masking = True
 
     def build(self, input_shape):
-        self.W = self.add_weight((self.input_dim, 3*self.units),
+        self.W = self.add_weight(shape=(self.input_dim, 3*self.units),
                                  initializer=glorot_uniform(),
                                  regularizer=l2(self.l2),
-                                 name='W_{}'.format(self.name))
-        self.U = self.add_weight((self.units, 3*self.units),
+                                 name='W')
+        self.U = self.add_weight(shape=(self.units, 3*self.units),
                                  initializer=orthogonal(),
                                  regularizer=l2(self.l2),
-                                 name='U_{}'.format(self.name))
-        self.b = self.add_weight((3*self.units),
+                                 name='U')
+        self.b = self.add_weight(shape=(3*self.units),
                                  initializer=zeros(),
-                                 name='b_{}'.format(self.name))
-        self.gammas = self.add_weight((2, 3*self.units,),
+                                 name='b')
+        self.gammas = self.add_weight(shape=(2, 3*self.units,),
                                       initializer=zeros(),
-                                      name='gammas_{}'.format(self.name))
-        self.betas = self.add_weight((2, 3*self.units,),
+                                      name='gammas')
+        self.betas = self.add_weight(shape=(2, 3*self.units,),
                                      initializer=zeros(),
-                                     name='betas_{}'.format(self.name))
+                                     name='betas')
 
-        self.W1 = self.add_weight((self.units, 1),
+        self.W1 = self.add_weight(shape=(self.units, 1),
                                   initializer=glorot_uniform(),
                                   regularizer=l2(self.l2),
-                                  name='W1_{}'.format(self.name))
-        self.b1 = self.add_weight((1),
+                                  name='W1')
+        self.b1 = self.add_weight(shape=(1),
                                  initializer=zeros(),
-                                 name='b1_{}'.format(self.name))
+                                 name='b1')
 
         self.built = True
 
