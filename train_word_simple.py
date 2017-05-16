@@ -178,6 +178,7 @@ def build_generator_HRNN(data, settings, indexes):
             bucket.append((sentence, label))
             if len(bucket)==settings['batch_size']:
                 X, Y = build_batch(data, settings, bucket)
+                bucket = []
                 yield X, Y
     return generator()
 

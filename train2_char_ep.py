@@ -15,16 +15,39 @@ import utils
 from train2_char_config import init_settings
 
 
-def get_data(settings):
-    word_corpus_encode, word_corpus_decode, cnt, mean = utils.load_word_corpus(settings['max_features'])
-    char_corpus_encode, char_corpus_decode, char_count = utils.load_char_corpus(1e-5)
+FASTTEXT_PATH = "/media/ivodopyanov/fb66ccd0-b7e5-4198-ab3a-5ab906fc8443/home/ivodopynov/wiki.ru.vec"
 
-    data = {'words': word_corpus_decode,
-            'word_freq': cnt,
-            'word_freq_base': mean,
-            'char_corpus_encode': char_corpus_encode,
-            'char_corpus_decode': char_corpus_decode,
-            'char_count': char_count}
+def load_fasttext():
+
+    words = []
+    chars = set()
+    lines_count = 0
+    with open(FASTTEXT_PATH, "rt") as f:
+        for idx, line in enumerate(f):
+            if idx==0:
+                data = line.split(" ")
+                lines_count = int(data[0])
+                continue
+            if idx % 1000 == 0:
+                sys.stdout.write("\r loading fasttext {} / {}".format(idx, lines_count))
+            data = line.split(" ")
+            word = data[0]
+            for char in word:
+                chars.add(char)
+            words.append(word)
+    chars = list(chars)
+    chars.sort()
+    chars_dict = {}
+    for idx, char in enumerate(chars):
+        chars_dict[char]=idx
+
+    return words, chars_dict
+
+def get_data(settings):
+    words, chars_dict = load_fasttext()
+    data = {'words': words,
+            'chars': chars_dict,
+            'char_count': len(chars_dict)+1}
     return data
 
 def build_generator(data, settings, indexes):
@@ -40,10 +63,9 @@ def build_generator(data, settings, indexes):
                 np.random.shuffle(walk_order)
             bucket.append(word)
             if len(bucket)==settings['batch_size']:
-                X, Y, sample_weights, words = build_batch(data, settings, bucket)
-
+                X, Y, words = build_batch(data, settings, bucket)
                 bucket = []
-                yield [X, Y, sample_weights, words]
+                yield [X, Y, words]
     return generator()
 
 def build_model_end_detector(data, settings):
@@ -80,27 +102,25 @@ def prepare_objects(data, settings):
 def build_batch(data, settings, words):
     X = np.zeros((settings['batch_size'], settings['max_len'], data['char_count']))
     Y = np.zeros((settings['batch_size'], 1))
-    sample_weights = np.zeros((settings['batch_size']))
     result_words = []
     for i, word in enumerate(words):
         full_word = randint(0,1)
-        if full_word == 1:
+        if full_word == 1 or len(word) == 1:
             word_length = len(word)
         else:
-            word_length = randint(0, len(word)-1)
+            word_length = randint(1, len(word)-1)
         Y[i][0]= full_word
         result_words.append(word[0:word_length])
-        sample_weights[i] = data['word_freq'][word] / data['word_freq_base']
         result_ch_pos = 0
         for ch_pos in range(word_length):
-            if word[ch_pos] in data['char_corpus_encode']:
-                X[i][result_ch_pos][data['char_corpus_encode'][word[ch_pos]]] = True
+            if word[ch_pos] in data['chars']:
+                X[i][result_ch_pos][data['chars'][word[ch_pos]]] = True
             else:
-                X[i][result_ch_pos][data['char_count']-3] = True
+                X[i][result_ch_pos][data['char_count']-1] = True
             result_ch_pos += 1
             if result_ch_pos == settings['max_len']-2:
                 break
-    return X, Y, sample_weights, result_words
+    return X, Y, result_words
 
 def run_training_end_detector(data, objects, settings):
     model = objects['end_detector_model']
@@ -112,8 +132,8 @@ def run_training_end_detector(data, objects, settings):
         loss_total = []
         acc_total = []
         for j in range(epoch_size):
-            X, Y, sample_weights = next(objects['data_gen'])
-            loss = model.train_on_batch(X, Y, sample_weight=sample_weights)
+            X, Y, words = next(objects['data_gen'])
+            loss = model.train_on_batch(X, Y)
             loss_total.append(loss[0])
             acc_total.append(loss[1])
             if len(loss_total) == 0:
@@ -131,8 +151,8 @@ def run_training_end_detector(data, objects, settings):
         acc_total = []
         sys.stdout.write("\n")
         for i in range(val_epoch_size):
-            X, Y, sample_weights = next(objects['val_gen'])
-            loss = model.evaluate(X, Y, batch_size=settings['batch_size'], verbose=0, sample_weight=sample_weights)
+            X, Y, words = next(objects['val_gen'])
+            loss = model.evaluate(X, Y, batch_size=settings['batch_size'], verbose=0)
             loss_total.append(loss[0])
             acc_total.append(loss[1])
             if len(loss_total) == 0:
@@ -168,4 +188,4 @@ def test():
 
 
 if __name__=="__main__":
-    test()
+    train()
