@@ -17,8 +17,7 @@ from train2_char_config import init_settings
 
 FASTTEXT_PATH = "/media/ivodopyanov/fb66ccd0-b7e5-4198-ab3a-5ab906fc8443/home/ivodopynov/wiki.ru.vec"
 
-def load_fasttext():
-
+def load_fasttext(settings):
     words = []
     chars = set()
     lines_count = 0
@@ -32,6 +31,8 @@ def load_fasttext():
                 sys.stdout.write("\r loading fasttext {} / {}".format(idx, lines_count))
             data = line.split(" ")
             word = data[0]
+            if len(word) > settings['max_len']:
+                continue
             for char in word:
                 chars.add(char)
             words.append(word)
@@ -44,7 +45,7 @@ def load_fasttext():
     return words, chars_dict
 
 def get_data(settings):
-    words, chars_dict = load_fasttext()
+    words, chars_dict = load_fasttext(settings)
     data = {'words': words,
             'chars': chars_dict,
             'char_count': len(chars_dict)+1}
