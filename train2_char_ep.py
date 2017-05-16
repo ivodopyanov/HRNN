@@ -7,7 +7,7 @@ from keras.layers import Dense, Input, GRU, RepeatVector, Masking, Activation
 from keras.models import Model
 from keras.layers.wrappers import TimeDistributed
 from keras.optimizers import Adam
-from Encoder2.End_Predictor import EndPredictor
+from Encoder2.End_Predictor import EndPredictor, EndPredictorFinalStep
 from Encoder2.Encoder import Encoder
 from Encoder2.Unmask import Unmask
 
@@ -29,6 +29,8 @@ def load_fasttext(settings):
                 continue
             if idx % 1000 == 0:
                 sys.stdout.write("\r loading fasttext {} / {}".format(idx, lines_count))
+            if idx == 50000:
+                break
             data = line.split(" ")
             word = data[0]
             if len(word) > settings['max_len']:
@@ -72,14 +74,18 @@ def build_generator(data, settings, indexes):
 def build_model_end_detector(data, settings):
     data_input = Input(shape=(settings['max_len'],data['char_count']))
     masking = Masking()(data_input)
-    end_predictor = EndPredictor(return_sequences=True,
-                                 input_dim=data['char_count'],
-                                 units=settings['char_units_ep'],
+    layer = TimeDistributed(Dense(settings['char_units_ep'], activation='relu'))(masking)
+    for level in range(settings['char_ep_depth']):
+        layer = EndPredictor(units=settings['char_units_ep'],
                                  l2=settings['l2'],
                                  dropout_u=settings['dropout_u'],
                                  dropout_w=settings['dropout_w'],
-                                 batch_size=settings['batch_size'])(masking)
-    model = Model(inputs=data_input, outputs=end_predictor)
+                                 batch_size=settings['batch_size'])(layer)
+    layer = EndPredictorFinalStep(return_sequences=True,
+                                  batch_size=settings['batch_size'],
+                                  units=settings['char_units_ep'],
+                                  l2=settings['l2'])(layer)
+    model = Model(inputs=data_input, outputs=layer)
     model.compile(optimizer='adam', loss='mse', metrics=['binary_accuracy'])
     return model
 

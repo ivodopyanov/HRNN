@@ -7,6 +7,7 @@ def init_settings():
     result['max_len'] = 64
     result['epoch_mult']=1
     result['char_units_ep']=128
+    result['char_ep_depth']=3
     result['char_units']=128
     result['word_units']=128
     result['epochs']=100
