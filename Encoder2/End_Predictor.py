@@ -39,32 +39,48 @@ class EndPredictor(Layer):
         self.betas = self.add_weight(shape=(2, 3*self.units,),
                                      initializer=zeros(),
                                      name='betas')
+        self.W1 = self.add_weight(shape=(self.units, 1),
+                                  initializer=glorot_uniform(),
+                                  regularizer=l2(self.l2),
+                                  name='W1')
+        self.b1 = self.add_weight(shape=(1),
+                                 initializer=zeros(),
+                                 name='b1')
         self.built = True
 
     def compute_mask(self, input, input_mask=None):
-        return input_mask
+        return None
 
     def compute_output_shape(self, input_shape):
-        return (input_shape[0], input_shape[1], 1)
+        return (input_shape[0][0], 1)
 
 
     def call(self, input, mask=None):
-        x = input
-        data_mask = mask
+        x = input[0]
+        bucket_size = input[1][0][0]
+        data_mask = mask[0]
         if data_mask.ndim == x.ndim-1:
             data_mask = K.expand_dims(data_mask)
         assert data_mask.ndim == x.ndim
         data_mask = data_mask.dimshuffle([1,0])
+        data_mask = data_mask[:bucket_size]
         x = x.dimshuffle([1,0,2])
+        x = x[:bucket_size]
+
 
         initial_h = K.zeros((self.batch_size, self.units))
+        initial_result = K.zeros((self.batch_size, 1))
 
         results, _ = T.scan(self.horizontal_step,
                             sequences=[x, data_mask],
                             outputs_info=[initial_h])
-        return results.dimshuffle([1,0,2])
+        results, _ = T.scan(self.final_step,
+                            sequences=[results],
+                            outputs_info=[initial_result])
+        return results[-1]
 
-
+    def final_step(self, x, h_tm1):
+        return K.sigmoid(K.dot(x,self.W1)+self.b1)
 
     def horizontal_step(self, x, x_mask, h_tm1):
         if 0 < self.dropout_u < 1:
@@ -103,46 +119,3 @@ class EndPredictor(Layer):
         return x_normed
 
 
-class EndPredictorFinalStep(Layer):
-    def __init__(self, return_sequences, batch_size, units, l2, **kwargs):
-        self.return_sequences = return_sequences
-        self.batch_size = batch_size
-        self.units = units
-        self.l2 = l2
-        super(EndPredictorFinalStep, self).__init__(**kwargs)
-        self.supports_masking = True
-
-    def compute_mask(self, input, input_mask=None):
-        return None
-
-    def compute_output_shape(self, input_shape):
-        if self.return_sequences:
-            return (input_shape[0], 1)
-        else:
-            return (input_shape[0], input_shape[1], 1)
-
-    def build(self, input_shape):
-        self.W = self.add_weight(shape=(self.units, 1),
-                                  initializer=glorot_uniform(),
-                                  regularizer=l2(self.l2),
-                                  name='W')
-        self.b = self.add_weight(shape=(1),
-                                 initializer=zeros(),
-                                 name='b')
-
-        self.built = True
-
-    def call(self, input, mask=None):
-        x = input
-        x = x.dimshuffle([1,0,2])
-        initial_result = K.zeros((self.batch_size, 1))
-        results, _ = T.scan(self.final_step,
-                            sequences=[x],
-                            outputs_info=[initial_result])
-        if self.return_sequences:
-            return results[-1]
-        else:
-            return results
-
-    def final_step(self, x, h_tm1):
-        return K.sigmoid(K.dot(x,self.W)+self.b)

@@ -2,6 +2,7 @@
 
 def init_settings():
     result = {}
+    result['bucket_size_step']=4
     result['max_features'] = 30000
     result['batch_size']=8
     result['max_len'] = 64
