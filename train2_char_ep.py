@@ -2,6 +2,7 @@ import sys
 import numpy as np
 from math import ceil
 from random import shuffle, randint
+from io import open
 
 
 from keras.layers import Dense, Input, GRU, RepeatVector, Masking, Activation
@@ -22,7 +23,7 @@ def load_fasttext(settings):
     words = []
     chars = set()
     lines_count = 0
-    with open(FASTTEXT_PATH, "rt") as f:
+    with open(FASTTEXT_PATH, "rt", encoding='utf8') as f:
         for idx, line in enumerate(f):
             if idx==0:
                 data = line.split(" ")
@@ -50,6 +51,7 @@ def load_fasttext(settings):
 def get_data(settings):
     words, chars_dict = load_fasttext(settings)
     data = {'words': words,
+            'words_set': set(words),
             'chars': chars_dict,
             'char_count': len(chars_dict)+1}
     return data
@@ -65,16 +67,13 @@ def build_generator(data, settings, indexes):
             if len(walk_order) == 0:
                 walk_order = list(indexes)
                 np.random.shuffle(walk_order)
-            full_word = randint(0,1)
-            if full_word == 1 or len(word) == 1:
-                word_length = len(word)
-            else:
-                word_length = randint(1, len(word)-1)
-
+            word_length = randint(1, len(word))
+            sub_word = word[0:word_length]
+            full_word =  sub_word in data['words_set']
             bucket_size = ceil((word_length+1.0) / settings['bucket_size_step'])*settings['bucket_size_step']
             if bucket_size not in buckets:
                 buckets[bucket_size] = []
-            buckets[bucket_size].append((word[0:word_length], full_word))
+            buckets[bucket_size].append((sub_word, full_word))
             if len(buckets[bucket_size])==settings['batch_size']:
                 X, Y = build_batch(data, settings, buckets[bucket_size])
                 batch_sentences = buckets[bucket_size]
@@ -106,12 +105,13 @@ def build_model_end_detector(data, settings):
     data_input = Input(shape=(settings['max_len'],data['char_count']))
     bucket_size_input = Input(shape=(1,), dtype="int32")
     masking = Masking()(data_input)
-    layer = TimeDistributed(Dense(settings['char_units_ep'], activation='relu'))(masking)
-    layer = EndPredictor(units=settings['char_units_ep'],
-                                 l2=settings['l2'],
-                                 dropout_u=settings['dropout_u'],
-                                 dropout_w=settings['dropout_w'],
-                                 batch_size=settings['batch_size'])([layer, bucket_size_input])
+    layer = EndPredictor(reverse=settings['ep_reverse'],
+                         input_units=data['char_count'],
+                         units=settings['char_units_ep'],
+                         l2=settings['l2'],
+                         dropout_u=settings['dropout_u'],
+                         dropout_w=settings['dropout_w'],
+                         batch_size=settings['batch_size'])([masking, bucket_size_input])
     model = Model(inputs=[data_input, bucket_size_input], outputs=layer)
     model.compile(optimizer='adam', loss='mse', metrics=['binary_accuracy'])
     return model
@@ -177,7 +177,7 @@ def run_training_end_detector(data, objects, settings):
             else:
                 avg_acc = np.sum(acc_total)*1.0/len(acc_total)
 
-            sys.stdout.write("\rTesting batch {} / {}: loss = {:.4f}, acc  ={:.4f}"
+            sys.stdout.write("\rTesting batch {} / {}: loss = {:.4f}, acc  = {:.4f}"
                          .format(i+1, val_epoch_size, avg_loss, avg_acc))
 
 

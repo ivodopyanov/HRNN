@@ -11,7 +11,9 @@ import theano.tensor as TS
 from theano.printing import Print
 
 class EndPredictor(Layer):
-    def __init__(self, units, l2, dropout_w, dropout_u, batch_size, **kwargs):
+    def __init__(self, reverse, input_units, units, l2, dropout_w, dropout_u, batch_size, **kwargs):
+        self.reverse = reverse
+        self.input_units = input_units
         self.units = units
         self.l2 = l2
         self.epsilon = 1e-5
@@ -22,7 +24,7 @@ class EndPredictor(Layer):
         self.supports_masking = True
 
     def build(self, input_shape):
-        self.W = self.add_weight(shape=(self.units, 3*self.units),
+        self.W = self.add_weight(shape=(self.input_units, 3*self.units),
                                  initializer=glorot_uniform(),
                                  regularizer=l2(self.l2),
                                  name='W')
@@ -73,7 +75,8 @@ class EndPredictor(Layer):
 
         results, _ = T.scan(self.horizontal_step,
                             sequences=[x, data_mask],
-                            outputs_info=[initial_h])
+                            outputs_info=[initial_h],
+                            go_backwards=self.reverse)
         results, _ = T.scan(self.final_step,
                             sequences=[results],
                             outputs_info=[initial_result])

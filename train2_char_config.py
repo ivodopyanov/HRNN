@@ -16,4 +16,5 @@ def init_settings():
     result['dropout_w']=0
     result['l2']=1e-5
     result['hidden'] = 128
+    result['ep_reverse'] = False
     return result
