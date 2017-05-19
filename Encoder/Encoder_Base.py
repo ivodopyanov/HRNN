@@ -4,7 +4,7 @@ from keras.regularizers import l2
 from keras.engine import Layer
 
 
-from keras.initializers import glorot_uniform, orthogonal, zeros
+from keras.initializers import glorot_uniform, orthogonal, zeros, ones
 import theano.tensor as TS
 from theano.printing import Print
 
@@ -87,7 +87,7 @@ class Encoder_Base(Layer):
                                           name='b_action_3_{}'.format(self.name))
 
         self.gammas = self.add_weight((2, 3*self.hidden_dim,),
-                                      initializer=zeros(),
+                                      initializer=ones(),
                                       name='gammas_{}'.format(self.name))
         self.betas = self.add_weight((2, 3*self.hidden_dim,),
                                      initializer=zeros(),
