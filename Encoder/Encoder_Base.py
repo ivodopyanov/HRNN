@@ -43,53 +43,53 @@ class Encoder_Base(Layer):
 
 
     def build(self, input_shape):
-        self.W_emb = self.add_weight((self.input_dim, self.hidden_dim),
+        self.W_emb = self.add_weight(shape=(self.input_dim, self.hidden_dim),
                                      initializer=glorot_uniform(),
                                      regularizer=l2(self.l2),
                                      name='W_emb_{}'.format(self.name))
-        self.b_emb = self.add_weight((self.hidden_dim),
+        self.b_emb = self.add_weight(shape=(self.hidden_dim),
                                      initializer=zeros(),
                                      name='b_emb_{}'.format(self.name))
 
-        self.W = self.add_weight((self.hidden_dim, 3*self.hidden_dim),
+        self.W = self.add_weight(shape=(self.hidden_dim, 3*self.hidden_dim),
                                  initializer=glorot_uniform(),
                                  regularizer=l2(self.l2),
                                  name='W_{}'.format(self.name))
-        self.U = self.add_weight((self.hidden_dim, 3*self.hidden_dim),
+        self.U = self.add_weight(shape=(self.hidden_dim, 3*self.hidden_dim),
                                  initializer=orthogonal(),
                                  regularizer=l2(self.l2),
                                  name='U_{}'.format(self.name))
-        self.b = self.add_weight((3*self.hidden_dim),
+        self.b = self.add_weight(shape=(3*self.hidden_dim),
                                  initializer=zeros(),
                                  name='b_{}'.format(self.name))
 
 
-        self.W_action_1 = self.add_weight((self.hidden_dim, self.action_dim),
+        self.W_action_1 = self.add_weight(shape=(self.hidden_dim, self.action_dim),
                                           initializer=glorot_uniform(),
                                           trainable=False,
                                           name='W_action_1_{}'.format(self.name))
-        self.U_action_1 = self.add_weight((self.hidden_dim, self.action_dim),
+        self.U_action_1 = self.add_weight(shape=(self.hidden_dim, self.action_dim),
                                           initializer=orthogonal(),
                                           trainable=False,
                                           name='U_action_1_{}'.format(self.name))
-        self.b_action_1 = self.add_weight((self.action_dim,),
+        self.b_action_1 = self.add_weight(shape=(self.action_dim,),
                                           initializer=zeros(),
                                           trainable=False,
                                           name='b_action_2_{}'.format(self.name))
 
-        self.W_action_3 = self.add_weight((self.action_dim, 2),
+        self.W_action_3 = self.add_weight(shape=(self.action_dim, 2),
                                           initializer=glorot_uniform(),
                                           trainable=False,
                                           name='W_action_3_{}'.format(self.name))
-        self.b_action_3 = self.add_weight((2,),
+        self.b_action_3 = self.add_weight(shape=(2,),
                                           initializer=zeros(),
                                           trainable=False,
                                           name='b_action_3_{}'.format(self.name))
 
-        self.gammas = self.add_weight((2, 3*self.hidden_dim,),
+        self.gammas = self.add_weight(shape=(2, 3*self.hidden_dim,),
                                       initializer=ones(),
                                       name='gammas_{}'.format(self.name))
-        self.betas = self.add_weight((2, 3*self.hidden_dim,),
+        self.betas = self.add_weight(shape=(2, 3*self.hidden_dim,),
                                      initializer=zeros(),
                                      name='betas_{}'.format(self.name))
         self.built = True

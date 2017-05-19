@@ -48,7 +48,7 @@ def get_data(settings):
     from collections import Counter
     cnt = Counter([len(l['sentence']) for l in result])
 
-    word_corpus_encode, word_corpus_decode = utils.load_word_corpus(settings['max_features'])
+    word_corpus_encode, word_corpus_decode, cnt, mean = utils.load_word_corpus(settings['max_features'])
     settings['num_of_classes'] = len(labels_list)
     data = {'labels': labels_list,
             'sentences': result,

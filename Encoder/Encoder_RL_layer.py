@@ -22,21 +22,21 @@ class Encoder_RL_Layer(Layer):
 
 
     def build(self, input_shape):
-        self.W_action_1 = self.add_weight((self.hidden_dim, self.action_dim),
+        self.W_action_1 = self.add_weight(shape=(self.hidden_dim, self.action_dim),
                                           initializer=glorot_uniform(),
                                           regularizer=l2(self.l2),
                                           name='W_action_1_{}'.format(self.name))
-        self.U_action_1 = self.add_weight((self.hidden_dim, self.action_dim),
+        self.U_action_1 = self.add_weight(shape=(self.hidden_dim, self.action_dim),
                                           initializer=orthogonal(),
                                           name='U_action_1_{}'.format(self.name))
-        self.b_action_1 = self.add_weight((self.action_dim,),
+        self.b_action_1 = self.add_weight(shape=(self.action_dim,),
                                           initializer=zeros(),
                                           name='b_action_2_{}'.format(self.name))
 
-        self.W_action_3 = self.add_weight((self.action_dim, 2),
+        self.W_action_3 = self.add_weight(shape=(self.action_dim, 2),
                                           initializer=glorot_uniform(),
                                           name='W_action_3_{}'.format(self.name))
-        self.b_action_3 = self.add_weight((2,),
+        self.b_action_3 = self.add_weight(shape=(2,),
                                           initializer=zeros(),
                                           name='b_action_3_{}'.format(self.name))
 
