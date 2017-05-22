@@ -116,8 +116,8 @@ def run_training2(data, objects, settings):
             chosen_action = y_pred[5]
             depth = y_pred[6]
 
-            #error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
-            error = -np.log(np.sum(output*batch[1], axis=1))
+            error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
+            #error = -np.log(np.sum(output*batch[1], axis=1))
             X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action)
             loss2 = rl_model.train_on_batch(X,Y)
 
@@ -206,8 +206,8 @@ def run_training_encoder_only(data, objects, settings):
         for j in range(epoch_size):
             batch = next(objects['data_gen'])
             loss1 = encoder.train_on_batch(batch[0], batch[1])
-            loss1_total.append(loss1[0])
-            acc_total.append(loss1[1])
+            loss1_total.append(loss1[1])
+            acc_total.append(loss1[2])
 
             if len(loss1_total) == 0:
                 avg_loss1 = 0
@@ -228,8 +228,8 @@ def run_training_encoder_only(data, objects, settings):
             batch = next(objects['val_gen'])
             loss1 = encoder.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
 
-            loss1_total.append(loss1[0])
-            acc_total.append(loss1[1])
+            loss1_total.append(loss1[1])
+            acc_total.append(loss1[2])
             sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}"
                              .format(i+1, val_epoch_size,
                                      np.sum(loss1_total)*1.0/len(loss1_total),
