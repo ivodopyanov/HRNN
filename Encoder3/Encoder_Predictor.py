@@ -7,7 +7,7 @@ from keras.engine import Layer
 import theano as T
 import theano.tensor as TS
 from theano.printing import Print
-from Encoder_Base import Encoder_Base
+from Encoder3.Encoder_Base import Encoder_Base
 
 
 class Encoder_Predictor(Encoder_Base):
@@ -164,7 +164,7 @@ class Encoder_Predictor(Encoder_Base):
         continue_accumulation_for_total_h = TS.extra_ops.repeat(continue_accumulation_for_total_h, self.hidden_dim, axis=2)
         total_h = K.switch(continue_accumulation_for_total_h, total_h_tm1, total_h_after_reduce)
 
-        h_ = self.gru_step(x, h_tm1, B_W, B_U)
+        h_ = K.relu(K.dot(x*B_W, self.W) + K.dot(h_tm1*B_U, self.U) + self.b)
         continue_accumulation_for_h = chosen_action.dimshuffle([0,'x'])
         continue_accumulation_for_h = TS.extra_ops.repeat(continue_accumulation_for_h, self.hidden_dim, axis=1)
         h = K.switch(continue_accumulation_for_h, h_, x)

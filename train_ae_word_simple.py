@@ -10,10 +10,6 @@ from keras.models import Model
 from keras.optimizers import Adam
 
 import utils
-from Encoder3.Encoder_Predictor import Encoder_Predictor
-from Encoder3.Encoder_Processor import Encoder_Processor
-from Encoder3.Encoder_RL_layer import Encoder_RL_Layer
-from train_utils import run_training2, copy_weights_encoder_to_predictor_wordbased, run_training_encoder_only, run_training_RL_only
 
 CASES_FILENAME = "cases.txt"
 QUOTES = ["'", '“', '"']
@@ -48,7 +44,7 @@ def get_data(settings):
     from collections import Counter
     cnt = Counter([len(l['sentence']) for l in result])
 
-    word_corpus_encode, word_corpus_decode, cnt, mean = utils.load_word_corpus(settings['max_features'])
+    word_corpus_encode, word_corpus_decode = utils.load_word_corpus(settings['max_features'])
     settings['num_of_classes'] = len(labels_list)
     data = {'labels': labels_list,
             'sentences': result,
@@ -83,26 +79,25 @@ def update_corpus_with_glove(settings, data):
 def init_settings():
     settings = {}
     settings['word_embedding_size'] = 32
-    settings['sentence_embedding_size'] = 64
-    settings['depth'] = 6
-    settings['action_dim'] = 64
-    settings['dropout_W'] = 0.2
-    settings['dropout_U'] = 0.0
-    settings['dropout_action'] = 0.0
-    settings['dropout_emb'] = 0.0
-    settings['hidden_dims'] = [64]
-    settings['dense_dropout'] = 0.0
+    settings['sentence_embedding_size'] = 32
+    settings['depth'] = 5
+    settings['action_dim'] = 32
+    settings['dropout_W'] = 0.1
+    settings['dropout_U'] = 0.1
+    settings['dropout_action'] = 0.1
+    settings['dropout_emb'] = 0.1
+    settings['hidden_dims'] = [32]
+    settings['dense_dropout'] = 0.5
     settings['bucket_size_step'] = 4
     settings['batch_size'] = 6
     settings['max_len'] = 128
     settings['max_features']=10000
     settings['with_sentences']=False
     settings['epochs'] = 50
-    settings['random_action_prob'] = 0.3
-    settings['copy_etp'] = copy_weights_encoder_to_predictor_wordbased
+    settings['random_action_prob'] = 0
     settings['with_embedding'] = False
     settings['l2'] = 0.00001
-    settings['epoch_mult'] = 10
+    settings['epoch_mult'] = 1
     return settings
 
 def prepare_objects(data, settings):
@@ -114,21 +109,16 @@ def prepare_objects(data, settings):
     train_indexes = indexes[:train_segment]
     val_indexes = indexes[train_segment:]
 
-    encoder = build_encoder(data, settings)
-    predictor = build_predictor(data, settings)
-    rl_model = build_RL_model(settings)
+    model = build_model(data, settings)
     data_gen = build_generator_HRNN(data, settings, train_indexes)
     val_gen = build_generator_HRNN(data, settings, val_indexes)
-
-    return {'encoder': encoder,
-            'predictor': predictor,
-            'rl_model': rl_model,
+    return {'model': model,
             'data_gen': data_gen,
             'val_gen': val_gen,
             'train_indexes': train_indexes,
             'val_indexes': val_indexes}
 
-def build_encoder(data, settings):
+def build_processor(data, settings):
     sys.stdout.write('Building model\n')
     data_input = Input(shape=(settings['max_len'],))
     bucket_size_input = Input(shape=(1,),dtype="int32")
@@ -148,27 +138,32 @@ def build_encoder(data, settings):
         embedding = SpatialDropout1D(settings['dropout_emb'])(embedding)
 
     encoder = Encoder_Processor(input_dim=settings['word_embedding_size'],
-                                hidden_dim=settings['sentence_embedding_size'],
+                                   hidden_dim=settings['sentence_embedding_size'],
+                                   depth=settings['depth'],
+                                   action_dim=settings['action_dim'],
+                                   batch_size = settings['batch_size'],
+                                   max_len=settings['max_len'],
+                                   dropout_u=settings['dropout_U'],
+                                   dropout_w=settings['dropout_W'],
+                                   dropout_action=settings['dropout_action'],
+                                   l2=settings['l2'],
+                                   name='encoder')([embedding, bucket_size_input])
+
+
+    decoder = Decoder_Processor(hidden_dim=settings['sentence_embedding_size'],
+                                output_dim=settings['word_embedding_size'],
                                 depth=settings['depth'],
                                 action_dim=settings['action_dim'],
-                                batch_size = settings['batch_size'],
+                                batch_size=settings['batch_size'],
                                 max_len=settings['max_len'],
                                 dropout_u=settings['dropout_U'],
                                 dropout_w=settings['dropout_W'],
                                 dropout_action=settings['dropout_action'],
                                 l2=settings['l2'],
-                                name='encoder')([embedding, bucket_size_input])
-    layer = encoder[0]
-
-    for idx, hidden_dim in enumerate(settings['hidden_dims']):
-        layer = Dropout(settings['dense_dropout'])(layer)
-        layer = Dense(hidden_dim, name='dense_{}'.format(idx))(layer)
-        layer = Activation('tanh')(layer)
-    layer = Dropout(settings['dense_dropout'])(layer)
-    output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(inputs=[data_input, bucket_size_input], outputs=[output, encoder[1]])
-    optimizer = Adam()
-    model.compile(loss={"output":"categorical_crossentropy", "encoder": None}, optimizer=optimizer, metrics={"output":'accuracy'})
+                                name='decoder')(encoder)
+    model = Model(inputs=[data_input, bucket_size_input], outputs=[decoder])
+    optimizer = Adam(lr=0.001, clipnorm=5)
+    model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=['accuracy'])
     return model
 
 def build_predictor(data, settings):
@@ -190,42 +185,71 @@ def build_predictor(data, settings):
     if settings['dropout_emb'] > 0:
         embedding = SpatialDropout1D(settings['dropout_emb'])(embedding)
     encoder = Encoder_Predictor(input_dim=settings['word_embedding_size'],
-                                hidden_dim=settings['sentence_embedding_size'],
-                                depth=settings['depth'],
-                                action_dim=settings['action_dim'],
-                                batch_size=settings['batch_size'],
-                                max_len=settings['max_len'],
-                                random_action_prob=settings['random_action_prob'],
-                                dropout_u=settings['dropout_U'],
-                                dropout_w=settings['dropout_W'],
-                                dropout_action=settings['dropout_action'],
-                                l2=settings['l2'],
-                                name='encoder')([embedding, bucket_size_input])
-    layer = encoder[0]
+                                     hidden_dim=settings['sentence_embedding_size'],
+                                     depth=settings['depth'],
+                                     action_dim=settings['action_dim'],
+                                     batch_size=settings['batch_size'],
+                                     max_len=settings['max_len'],
+                                     random_action_prob=settings['random_action_prob'],
+                                     dropout_u=settings['dropout_U'],
+                                     dropout_w=settings['dropout_W'],
+                                     dropout_action=settings['dropout_action'],
+                                     name='encoder')([embedding, bucket_size_input])
+    decoder = Decoder_Predictor(hidden_dim=settings['sentence_embedding_size'],
+                                     output_dim=settings['word_embedding_size'],
+                                     depth=settings['depth'],
+                                     action_dim=settings['action_dim'],
+                                     batch_size=settings['batch_size'],
+                                     max_len=settings['max_len'],
+                                     random_action_prob=settings['random_action_prob'],
+                                     dropout_u=settings['dropout_U'],
+                                     dropout_w=settings['dropout_W'],
+                                     dropout_action=settings['dropout_action'],
+                                     name='encoder')(encoder[0])
 
-    for idx, hidden_dim in enumerate(settings['hidden_dims']):
-        layer = Dropout(settings['dense_dropout'])(layer)
-        layer = Dense(hidden_dim, name='dense_{}'.format(idx))(layer)
-        layer = Activation('tanh')(layer)
-    layer = Dropout(settings['dense_dropout'])(layer)
-    output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(inputs=[data_input, bucket_size_input],
-                  outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6]])
+    model = Model(inputs=[data_input, bucket_size_input], outputs=[decoder[0],
+                                                                   encoder[1],
+                                                                   encoder[2],
+                                                                   encoder[3],
+                                                                   encoder[4],
+                                                                   encoder[5],
+                                                                   encoder[6],
+                                                                   decoder[1],
+                                                                   decoder[2],
+                                                                   decoder[3],
+                                                                   decoder[4],
+                                                                   decoder[5],
+                                                                   decoder[6]])
     return model
 
-
-def build_RL_model(settings):
+def build_RL_model_encoder(settings):
     x_input = Input(shape=(settings['sentence_embedding_size'],))
     h_tm1_input = Input(shape=(settings['sentence_embedding_size'],))
     layer = Encoder_RL_Layer(hidden_dim=settings['sentence_embedding_size'],
-                             action_dim=settings['action_dim'],
-                             dropout_action=settings['dropout_action'],
-                             dropout_w=settings['dropout_W'],
-                             dropout_u=settings['dropout_U'],
-                             l2=settings['l2'],
-                             name='encoder')([x_input, h_tm1_input])
+                     action_dim=settings['action_dim'],
+                     dropout_action=settings['dropout_action'],
+                     dropout_w=settings['dropout_W'],
+                     dropout_u=settings['dropout_U'],
+                     l2=settings['l2'],
+                     name='encoder')([x_input, h_tm1_input])
     model = Model(inputs=[x_input, h_tm1_input], outputs=[layer])
-    optimizer = Adam()
+    optimizer = Adam(clipnorm=5)
+    model.compile(loss='mse', optimizer=optimizer)
+    return model
+
+
+def build_RL_model_decoder(settings):
+    x_input = Input(shape=(settings['sentence_embedding_size'],))
+    h_tm1_input = Input(shape=(settings['sentence_embedding_size'],))
+    layer = Decoder_RL_Layer(hidden_dim=settings['sentence_embedding_size'],
+                     action_dim=settings['action_dim'],
+                     dropout_action=settings['dropout_action'],
+                     dropout_w=settings['dropout_W'],
+                     dropout_u=settings['dropout_U'],
+                     l2=settings['l2'],
+                     name='encoder')([x_input, h_tm1_input])
+    model = Model(inputs=[x_input, h_tm1_input], outputs=[layer])
+    optimizer = Adam(clipnorm=5)
     model.compile(loss='mse', optimizer=optimizer)
     return model
 
@@ -250,29 +274,27 @@ def build_generator_HRNN(data, settings, indexes):
                 buckets[bucket_size] = []
             buckets[bucket_size].append((sentence, label))
             if len(buckets[bucket_size])==settings['batch_size']:
-                X, Y = build_batch(data, settings, buckets[bucket_size])
+                X = build_batch(data, settings, buckets[bucket_size])
                 batch_sentences = buckets[bucket_size]
                 buckets[bucket_size] = []
 
                 bucket_size_input = np.zeros((settings['batch_size'],1), dtype=int)
                 bucket_size_input[0][0]=bucket_size
                 if settings['with_sentences']:
-                    yield [X, bucket_size_input], Y, batch_sentences
+                    yield [X, bucket_size_input], X, batch_sentences
                 else:
-                    yield [X, bucket_size_input], Y
+                    yield [X, bucket_size_input], X
     return generator()
 
 def build_batch(data, settings, sentence_batch):
     X = np.zeros((settings['batch_size'], settings['max_len']))
-    Y = np.zeros((settings['batch_size'], settings['num_of_classes']), dtype=np.bool)
     for i, sentence_tuple in enumerate(sentence_batch):
         for idx, word in enumerate(sentence_tuple[0]):
             if word in data['word_corpus_encode']:
                 X[i][idx] = data['word_corpus_encode'][word]+1
             else:
                 X[i][idx] = settings['max_features']+1
-        Y[i][data['labels'].index(sentence_tuple[1])] = True
-    return X, Y
+    return X
 
 
 
@@ -296,3 +318,8 @@ def train(filename):
 
 if __name__=="__main__":
     train("model")
+
+
+
+
+

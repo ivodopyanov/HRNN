@@ -19,8 +19,6 @@ def copy_weights_encoder_to_predictor_charbased(objects):
     predictor.get_layer('encoder').W.set_value(K.get_value(encoder.get_layer('encoder').W))
     predictor.get_layer('encoder').U.set_value(K.get_value(encoder.get_layer('encoder').U))
     predictor.get_layer('encoder').b.set_value(K.get_value(encoder.get_layer('encoder').b))
-    predictor.get_layer('encoder').gammas.set_value(K.get_value(encoder.get_layer('encoder').gammas))
-    predictor.get_layer('encoder').betas.set_value(K.get_value(encoder.get_layer('encoder').betas))
     predictor.get_layer('dense_0').kernel.set_value(K.get_value(encoder.get_layer('dense_0').kernel))
     predictor.get_layer('dense_0').bias.set_value(K.get_value(encoder.get_layer('dense_0').bias))
     predictor.get_layer('output').kernel.set_value(K.get_value(encoder.get_layer('output').kernel))
@@ -33,8 +31,6 @@ def copy_weights_rl_to_predictor(objects):
     predictor.get_layer('encoder').W_action_1.set_value(K.get_value(rl_model.get_layer('encoder').W_action_1))
     predictor.get_layer('encoder').U_action_1.set_value(K.get_value(rl_model.get_layer('encoder').U_action_1))
     predictor.get_layer('encoder').b_action_1.set_value(K.get_value(rl_model.get_layer('encoder').b_action_1))
-    #predictor.get_layer('encoder').W_action_2.set_value(K.get_value(rl_model.get_layer('encoder').W_action_2))
-    #predictor.get_layer('encoder').b_action_2.set_value(K.get_value(rl_model.get_layer('encoder').b_action_2))
     predictor.get_layer('encoder').W_action_3.set_value(K.get_value(rl_model.get_layer('encoder').W_action_3))
     predictor.get_layer('encoder').b_action_3.set_value(K.get_value(rl_model.get_layer('encoder').b_action_3))
 
@@ -44,8 +40,6 @@ def copy_weights_rl_to_encoder(objects):
     encoder.get_layer('encoder').W_action_1.set_value(K.get_value(rl_model.get_layer('encoder').W_action_1))
     encoder.get_layer('encoder').U_action_1.set_value(K.get_value(rl_model.get_layer('encoder').U_action_1))
     encoder.get_layer('encoder').b_action_1.set_value(K.get_value(rl_model.get_layer('encoder').b_action_1))
-    #encoder.get_layer('encoder').W_action_2.set_value(K.get_value(rl_model.get_layer('encoder').W_action_2))
-    #encoder.get_layer('encoder').b_action_2.set_value(K.get_value(rl_model.get_layer('encoder').b_action_2))
     encoder.get_layer('encoder').W_action_3.set_value(K.get_value(rl_model.get_layer('encoder').W_action_3))
     encoder.get_layer('encoder').b_action_3.set_value(K.get_value(rl_model.get_layer('encoder').b_action_3))
 
@@ -55,8 +49,6 @@ def copy_weights_predictor_to_encoder(objects):
     encoder.get_layer('encoder').W_action_1.set_value(K.get_value(predictor.get_layer('encoder').W_action_1))
     encoder.get_layer('encoder').U_action_1.set_value(K.get_value(predictor.get_layer('encoder').U_action_1))
     encoder.get_layer('encoder').b_action_1.set_value(K.get_value(predictor.get_layer('encoder').b_action_1))
-    #encoder.get_layer('encoder').W_action_2.set_value(K.get_value(predictor.get_layer('encoder').W_action_2))
-    #encoder.get_layer('encoder').b_action_2.set_value(K.get_value(predictor.get_layer('encoder').b_action_2))
     encoder.get_layer('encoder').W_action_3.set_value(K.get_value(predictor.get_layer('encoder').W_action_3))
     encoder.get_layer('encoder').b_action_3.set_value(K.get_value(predictor.get_layer('encoder').b_action_3))
 
@@ -102,11 +94,7 @@ def run_training2(data, objects, settings):
             settings['copy_etp'](objects)
 
             ins = batch[0] + [1.]
-            try:
-                y_pred = predictor.predict_function(ins)
-            except ValueError:
-                sys.stdout.write("ValueError2!\n")
-                continue
+            y_pred = predictor.predict_function(ins)
 
             output = y_pred[0]
             input_x = y_pred[1]
