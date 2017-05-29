@@ -2,9 +2,9 @@
 import sys
 import numpy as np
 import keras.backend as K
-from math import e
+from math import e, pow
 
-ERROR_LIMIT = e
+ERROR_LIMIT = pow(e,5)
 
 def copy_weights_encoder_to_predictor_wordbased(objects):
     encoder = objects['encoder']
