@@ -40,6 +40,8 @@ class Encoder_Processor(Encoder_Base):
         data_mask = data_mask.dimshuffle([1,0])
         data_mask = data_mask[:bucket_size]
 
+        #data_mask = Print("data_mask")(data_mask)
+
         x = K.dot(x, self.W_emb) + self.b_emb
         x = x.dimshuffle([1,0,2])
         x = x[:bucket_size]
@@ -47,45 +49,57 @@ class Encoder_Processor(Encoder_Base):
         initial_h = K.zeros((self.batch_size, self.hidden_dim))
         initial_depth = K.zeros((1,), dtype="int8")
 
+        #x = Print("x")(x)
+        #data_mask = Print("data_mask")(data_mask)
+
         results, _ = T.scan(self.vertical_step,
-                        outputs_info=[x, data_mask, initial_depth],
+                        outputs_info=[x, data_mask, data_mask, initial_depth],
                         non_sequences=[bucket_size],
                         n_steps=self.depth-1)
         x = results[0][-1]
         data_mask = results[1][-1]
-        depth = results[2][-1]
+        has_value = results[2][-1]
+        depth = results[3][-1]
 
-
+        #data_mask = Print("final_data_mask")(data_mask)
+        #has_value = Print("final has_value")(has_value)
+        initial_final_has_value = K.zeros((self.batch_size), dtype="bool")
         results, _ = T.scan(self.final_step,
-                            sequences=[x, data_mask],
-                            outputs_info=[initial_h])
+                            sequences=[x, data_mask, has_value],
+                            outputs_info=[initial_h, initial_final_has_value])
 
-        outputs = results[-1]
+        outputs = results[0][-1]
         return [outputs, depth]
 
 
-    def vertical_step(self, x, x_mask, prev_depth, bucket_size):
-        initial_h = x[0]
-        initial_total_h = K.zeros_like(x)
-        initial_total_h = initial_total_h.dimshuffle([1,0,2])
-        initial_total_h_mask = K.zeros_like(x_mask)
-        initial_total_h_mask = initial_total_h_mask.dimshuffle([1,0])
+    def vertical_step(self, x, x_mask, prev_has_value, prev_depth, bucket_size):
 
-        initial_x_mask_tm1 = x_mask[0]
+        #x_mask = Print("x_mask")(x_mask)
+        #prev_has_value = Print("prev_has_Value")(prev_has_value)
+
+        initial_h = K.zeros((self.batch_size, self.hidden_dim), name="initial_h")
+        initial_new_mask = K.ones((self.batch_size), dtype="bool", name="initial_new_mask")
+        initial_has_value = K.zeros((self.batch_size), dtype="bool")
 
         results, _ = T.scan(self.horizontal_step,
-                            sequences=[x[1:], x_mask[1:]],
-                            outputs_info=[initial_h, initial_total_h, initial_total_h_mask, initial_x_mask_tm1],
-                            non_sequences=[bucket_size])
-        total_h = results[1]
-        total_h_mask = results[2]
+                            sequences=[x, x_mask, prev_has_value],
+                            outputs_info=[initial_h, initial_new_mask, initial_has_value])
+        new_h = results[0]
+        new_mask = results[1]
+        has_value = results[2]
+
+        new_mask = TS.concatenate([new_mask[1:], K.ones((1, self.batch_size), dtype="bool")], axis=0)
 
         depth = TS.cast(prev_depth+1, dtype="int8")
 
-        return [total_h[-1].dimshuffle([1,0,2]), total_h_mask[-1].dimshuffle([1,0]), depth], T.scan_module.until(TS.eq(TS.sum(total_h_mask), TS.sum(x_mask)))
 
-    def horizontal_step(self, x, x_mask, h_tm1, total_h_tm1, total_h_mask_tm1, x_mask_tm1, bucket_size):
-        total_h_mask_next = self.get_next_value_mask(total_h_mask_tm1)
+        #new_mask = Print("new_mask")(new_mask)
+        #has_value = Print("has_value")(has_value)
+        #new_h = Print("h")(new_h)
+
+        return [new_h, new_mask, has_value, depth]#, T.scan_module.until(TS.eq(TS.sum(x_mask), TS.sum(new_mask)))
+
+    def horizontal_step(self, x, prev_mask, prev_has_value, h_tm1, new_mask_tm1, has_value_tm1):
 
         if 0 < self.dropout_u < 1:
             ones = K.ones((self.hidden_dim))
@@ -103,36 +117,42 @@ class Encoder_Processor(Encoder_Base):
         else:
             B_action = K.cast_to_floatx(1.)
 
-        policy = activations.relu(K.dot(x*B_W, self.W_action_1) + K.dot(h_tm1*B_U, self.U_action_1) + self.b_action_1)
+        policy = activations.tanh(K.dot(x*B_W, self.W_action_1) + K.dot(h_tm1*B_U, self.U_action_1) + self.b_action_1)
         policy = K.exp(K.minimum(K.dot(policy*B_action, self.W_action_3)+self.b_action_3,5))
 
-        continue_accumulation = K.switch(TS.le(policy[:,0], policy[:, 1]), 1, 0)
-        continue_accumulation = K.switch(x_mask_tm1*(1-x_mask), 0, continue_accumulation)
-        continue_accumulation = TS.cast(continue_accumulation, "bool")
+        # 1 = reduce, 0 = continue acc
+        new_mask = K.switch(TS.le(policy[:,0], policy[:, 1]), 1, 0)
+        new_mask = prev_mask*new_mask
+        new_mask = TS.cast(new_mask, "bool")
+
+        #prev_mask = Print("prev_mask")(prev_mask)
+        #prev_has_value = Print("prev_has_value")(prev_has_value)
+        #new_mask = Print("new_mask")(new_mask)
+        #has_value_tm1 = Print("has_value_tm1")(has_value_tm1)
+
+        both = prev_mask*prev_has_value*(1-new_mask)*has_value_tm1
+        x_only = prev_mask*prev_has_value*(new_mask + (1-new_mask)*(1-has_value_tm1))
+        h_only = (1-prev_mask + prev_mask*(1-prev_has_value))*(1-new_mask)*has_value_tm1
+
+        #both = Print("both")(both)
+        #x_only = Print("x_only")(x_only)
+        #h_only = Print("h_only")(h_only)
+
+        has_value = both + x_only + h_only
+        has_value = TS.cast(has_value, "bool")
 
 
-        total_h_after_reduce = self.insert_tensor_at_mask(total_h_tm1, total_h_mask_next, h_tm1, bucket_size)
-        continue_accumulation_for_total_h = continue_accumulation.dimshuffle([0,'x'])
-        continue_accumulation_for_total_h = TS.extra_ops.repeat(continue_accumulation_for_total_h, bucket_size, axis=1)
-        total_h_mask = K.switch(continue_accumulation_for_total_h, total_h_mask_tm1, total_h_mask_tm1 + total_h_mask_next)
-        continue_accumulation_for_total_h = continue_accumulation_for_total_h.dimshuffle([0,1,'x'])
-        continue_accumulation_for_total_h = TS.extra_ops.repeat(continue_accumulation_for_total_h, self.hidden_dim, axis=2)
-        total_h = K.switch(continue_accumulation_for_total_h, total_h_tm1, total_h_after_reduce)
+        both_for_h = both.dimshuffle([0,'x'])
+        both_for_h = TS.extra_ops.repeat(both_for_h, self.hidden_dim, axis=1)
+        x_only_for_h = x_only.dimshuffle([0,'x'])
+        x_only_for_h = TS.extra_ops.repeat(x_only_for_h, self.hidden_dim, axis=1)
+        h_only_for_h = h_only.dimshuffle([0,'x'])
+        h_only_for_h = TS.extra_ops.repeat(h_only_for_h, self.hidden_dim, axis=1)
 
-        h_ = K.relu(K.dot(x*B_W, self.W) + K.dot(h_tm1*B_U, self.U) + self.b)
-        continue_accumulation_for_h = continue_accumulation.dimshuffle([0,'x'])
-        continue_accumulation_for_h = TS.extra_ops.repeat(continue_accumulation_for_h, self.hidden_dim, axis=1)
-        h = K.switch(continue_accumulation_for_h, h_, x)
+        h_ = activations.tanh(K.dot(x*B_W, self.W) + K.dot(h_tm1*B_U, self.U) + self.b)
+        h = both_for_h*h_ + x_only_for_h*x + h_only_for_h*h_
 
-        copy_old_value_mask = (1-x_mask)*(1-x_mask_tm1)
-        copy_old_value_mask = copy_old_value_mask.dimshuffle([0,'x'])
-        copy_old_value_mask = TS.extra_ops.repeat(copy_old_value_mask, bucket_size, axis=1)
-        total_h_mask = K.switch(copy_old_value_mask, total_h_mask_tm1, total_h_mask)
-        copy_old_value_mask = copy_old_value_mask.dimshuffle([0,1,'x'])
-        copy_old_value_mask = TS.extra_ops.repeat(copy_old_value_mask, self.hidden_dim, axis=2)
-        total_h = K.switch(copy_old_value_mask, total_h_tm1, total_h)
-
-        return h, total_h, total_h_mask, x_mask
+        return h, new_mask, has_value
 
 
     def get_config(self):

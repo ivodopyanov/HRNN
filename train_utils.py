@@ -2,7 +2,7 @@
 import sys
 import numpy as np
 import keras.backend as K
-from math import e, pow
+from math import e, pow, isnan
 
 ERROR_LIMIT = pow(e,5)
 
@@ -84,13 +84,18 @@ def run_training2(data, objects, settings):
         depth_total = []
         for j in range(epoch_size):
             batch = next(objects['data_gen'])
-            try:
-                loss1 = encoder.train_on_batch(batch[0], batch[1])
-            except ValueError:
-                sys.stdout.write("ValueError!\n")
-                continue
+            loss1 = encoder.train_on_batch(batch[0], batch[1])
             loss1_total.append(loss1[0])
             acc_total.append(loss1[2])
+
+            if len(loss1_total) == 0:
+                avg_loss1 = 0
+            else:
+                avg_loss1 = np.sum(loss1_total)*1.0/len(loss1_total)
+            if len(acc_total) == 0:
+                avg_acc = 0
+            else:
+                avg_acc = np.sum(acc_total)*1.0/len(acc_total)
 
             settings['copy_etp'](objects)
 
@@ -105,24 +110,19 @@ def run_training2(data, objects, settings):
             chosen_action = y_pred[5]
             depth = y_pred[6]
 
-            error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
-            #error = -np.log(np.sum(output*batch[1], axis=1))
-            X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action)
-            loss2 = rl_model.train_on_batch(X,Y)
-
-            loss2_total.append(loss2)
             depth_total.append(depth[0])
 
-            copy_weights_rl_to_predictor(objects)
+            if np.sum(policy_calculated) > 0:
+                error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
+                #error = -np.log(np.sum(output*batch[1], axis=1))
+                X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action)
+                loss2 = rl_model.train_on_batch(X,Y)
+                if isnan(loss2):
+                    pass
+                loss2_total.append(loss2)
+                copy_weights_rl_to_predictor(objects)
+                copy_weights_rl_to_encoder(objects)
 
-            if len(loss1_total) == 0:
-                avg_loss1 = 0
-            else:
-                avg_loss1 = np.sum(loss1_total)*1.0/len(loss1_total)
-            if len(acc_total) == 0:
-                avg_acc = 0
-            else:
-                avg_acc = np.sum(acc_total)*1.0/len(acc_total)
             if len(loss2_total) == 0:
                 avg_loss2 = 0
             else:
@@ -132,7 +132,7 @@ def run_training2(data, objects, settings):
             else:
                 avg_depth = np.sum(depth_total)*1.0/len(depth_total)
 
-            copy_weights_rl_to_encoder(objects)
+
 
             sys.stdout.write("\r batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, depth = {:.4f}"
                          .format(j+1, epoch_size,
@@ -160,21 +160,41 @@ def run_training2(data, objects, settings):
             policy_calculated = y_pred[4]
             chosen_action = y_pred[5]
             depth = y_pred[6]
-            error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
-            #error = -np.log(np.sum(output*batch[1], axis=1))
-            X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action)
-            loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
+            if np.sum(policy_calculated) > 0:
+                error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
+                #error = -np.log(np.sum(output*batch[1], axis=1))
+                X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action)
+                loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
 
-            loss2_total.append(loss2)
+                loss2_total.append(loss2)
             loss1_total.append(loss1[0])
             acc_total.append(loss1[2])
             depth_total.append(depth[0])
+
+            if len(loss1_total) == 0:
+                avg_loss1 = 0
+            else:
+                avg_loss1 = np.sum(loss1_total)*1.0/len(loss1_total)
+            if len(acc_total) == 0:
+                avg_acc = 0
+            else:
+                avg_acc = np.sum(acc_total)*1.0/len(acc_total)
+            if len(loss2_total) == 0:
+                avg_loss2 = 0
+            else:
+                avg_loss2 = np.sum(loss2_total)*1.0/len(loss2_total)
+            if len(depth_total) == 0:
+                avg_depth = 0
+            else:
+                avg_depth = np.sum(depth_total)*1.0/len(depth_total)
+
+
             sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, depth = {:.4f}"
                              .format(i+1, val_epoch_size,
-                                     np.sum(loss1_total)*1.0/len(loss1_total),
-                                     np.sum(acc_total)*1.0/len(acc_total),
-                                     np.sum(loss2_total)*1.0/len(loss2_total),
-                                     np.sum(depth_total)*1.0/len(depth_total)))
+                                     avg_loss1,
+                                     avg_acc,
+                                     avg_loss2,
+                                     avg_depth))
 
 
 

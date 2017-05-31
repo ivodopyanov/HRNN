@@ -6,6 +6,7 @@ from keras.engine import Layer
 import theano.tensor as TS
 from keras.initializers import glorot_uniform, orthogonal, zeros
 from keras.regularizers import l2
+from theano.printing import Print
 
 class Encoder_RL_Layer(Layer):
     def __init__(self,hidden_dim, action_dim,

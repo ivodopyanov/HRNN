@@ -90,7 +90,7 @@ class Encoder_Base(Layer):
 
 
 
-    def final_step(self, x, x_mask, h_tm1):
+    def final_step(self, x, x_mask, prev_has_value, h_tm1, has_value_tm1):
         if 0 < self.dropout_u < 1:
             ones = K.ones((self.hidden_dim))
             B_U = K.in_train_phase(K.dropout(ones, self.dropout_u), ones)
@@ -102,11 +102,24 @@ class Encoder_Base(Layer):
         else:
             B_W = K.cast_to_floatx(1.)
 
-        h = K.relu(K.dot(x*B_W, self.W) + K.dot(h_tm1*B_U, self.U) + self.b)
-        mask_for_h = K.expand_dims(x_mask)
+        #x = Print("x")(x)
+        #has_value_tm1 = Print("has_value_tm1")(has_value_tm1)
+        #x_mask = Print("x_mask")(x_mask)
+        #prev_has_value = Print("prev_has_value")(prev_has_value)
+        h = K.tanh(K.dot(x*B_W, self.W) + K.dot(h_tm1*B_U, self.U) + self.b)
+
+        has_value_tm1_for_h = K.expand_dims(has_value_tm1)
+        has_value_tm1_for_h = K.repeat_elements(has_value_tm1_for_h, self.hidden_dim, 1)
+        h = K.switch(has_value_tm1_for_h, h, x)
+
+        mask_for_h = K.expand_dims(x_mask*prev_has_value)
         mask_for_h = K.repeat_elements(mask_for_h, self.hidden_dim, 1)
         h = K.switch(mask_for_h, h, h_tm1)
-        return h
+        has_value = K.switch(x_mask*prev_has_value, 1, has_value_tm1)
+        has_value = TS.cast(has_value, "bool")
+
+        #h = Print("h")(h)
+        return h, has_value
 
 
     #Из маски 11111000000 делает маску 0000100000 (1 - на последнем элементе 1 исходной маски, остальное - 0)
