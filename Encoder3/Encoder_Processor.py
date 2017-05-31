@@ -117,7 +117,7 @@ class Encoder_Processor(Encoder_Base):
         else:
             B_action = K.cast_to_floatx(1.)
 
-        policy = activations.tanh(K.dot(x*B_W, self.W_action_1) + K.dot(h_tm1*B_U, self.U_action_1) + self.b_action_1)
+        policy = activations.relu(K.dot(x*B_W, self.W_action_1) + K.dot(h_tm1*B_U, self.U_action_1) + self.b_action_1)
         policy = K.exp(K.minimum(K.dot(policy*B_action, self.W_action_3)+self.b_action_3,5))
 
         # 1 = reduce, 0 = continue acc
@@ -149,7 +149,7 @@ class Encoder_Processor(Encoder_Base):
         h_only_for_h = h_only.dimshuffle([0,'x'])
         h_only_for_h = TS.extra_ops.repeat(h_only_for_h, self.hidden_dim, axis=1)
 
-        h_ = activations.tanh(K.dot(x*B_W, self.W) + K.dot(h_tm1*B_U, self.U) + self.b)
+        h_ = activations.relu(K.dot(x*B_W, self.W) + K.dot(h_tm1*B_U, self.U) + self.b)
         h = both_for_h*h_ + x_only_for_h*x + h_only_for_h*h_
 
         return h, new_mask, has_value
