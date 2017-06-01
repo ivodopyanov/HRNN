@@ -80,13 +80,15 @@ class Encoder_Processor(Encoder_Base):
         initial_h = K.zeros((self.batch_size, self.hidden_dim), name="initial_h")
         initial_new_mask = K.ones((self.batch_size), dtype="bool", name="initial_new_mask")
         initial_has_value = K.zeros((self.batch_size), dtype="bool")
+        initial_both = K.zeros((self.batch_size), dtype="bool")
 
         results, _ = T.scan(self.horizontal_step,
                             sequences=[x, x_mask, prev_has_value],
-                            outputs_info=[initial_h, initial_new_mask, initial_has_value])
+                            outputs_info=[initial_h, initial_new_mask, initial_has_value, initial_both])
         new_h = results[0]
         new_mask = results[1]
         has_value = results[2]
+        both = results[3]
 
         new_mask = TS.concatenate([new_mask[1:], K.ones((1, self.batch_size), dtype="bool")], axis=0)
 
@@ -97,9 +99,9 @@ class Encoder_Processor(Encoder_Base):
         #has_value = Print("has_value")(has_value)
         #new_h = Print("h")(new_h)
 
-        return [new_h, new_mask, has_value, depth]#, T.scan_module.until(TS.eq(TS.sum(x_mask), TS.sum(new_mask)))
+        return [new_h, new_mask, has_value, depth], T.scan_module.until(TS.eq(TS.sum(both), 0))
 
-    def horizontal_step(self, x, prev_mask, prev_has_value, h_tm1, new_mask_tm1, has_value_tm1):
+    def horizontal_step(self, x, prev_mask, prev_has_value, h_tm1, new_mask_tm1, has_value_tm1, both_tm1):
 
         if 0 < self.dropout_u < 1:
             ones = K.ones((self.hidden_dim))
@@ -150,9 +152,9 @@ class Encoder_Processor(Encoder_Base):
         h_only_for_h = TS.extra_ops.repeat(h_only_for_h, self.hidden_dim, axis=1)
 
         h_ = activations.relu(K.dot(x*B_W, self.W) + K.dot(h_tm1*B_U, self.U) + self.b)
-        h = both_for_h*h_ + x_only_for_h*x + h_only_for_h*h_
+        h = both_for_h*h_ + x_only_for_h*x + h_only_for_h*h_tm1
 
-        return h, new_mask, has_value
+        return h, new_mask, has_value, TS.cast(both, "bool")
 
 
     def get_config(self):

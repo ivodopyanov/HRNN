@@ -269,13 +269,17 @@ def run_training_RL_only(data, objects, settings):
             policy_calculated = y_pred[4]
             chosen_action = y_pred[5]
             depth = y_pred[6]
-            error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
-            #error = -np.log(np.sum(output*batch[1], axis=1))
-            X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action)
-            loss2 = rl_model.train_on_batch(X,Y)
-            loss2_total.append(loss2)
+
+            if np.sum(policy_calculated) > 0:
+                error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
+                #error = -np.log(np.sum(output*batch[1], axis=1))
+                X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action)
+                loss2 = rl_model.train_on_batch(X,Y)
+                loss2_total.append(loss2)
+                copy_weights_rl_to_predictor(objects)
+                copy_weights_rl_to_encoder(objects)
+
             depth_total.append(depth[0])
-            copy_weights_rl_to_predictor(objects)
             if len(loss2_total) == 0:
                 avg_loss2 = 0
             else:
@@ -285,7 +289,7 @@ def run_training_RL_only(data, objects, settings):
             else:
                 avg_depth = np.sum(depth_total)*1.0/len(depth_total)
             sys.stdout.write("\r batch {} / {}: loss2 = {:.4f}, avg depth = {:.2f}".format(j+1, epoch_size, avg_loss2, avg_depth))
-            copy_weights_rl_to_encoder(objects)
+
         sys.stdout.write("\n")
         loss1_total = []
         acc_total = []
@@ -302,11 +306,12 @@ def run_training_RL_only(data, objects, settings):
             policy_calculated = y_pred[4]
             chosen_action = y_pred[5]
             depth = y_pred[6]
-            #error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
-            error = -np.log(np.sum(output*batch[1], axis=1))
-            X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action)
-            loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
-            loss2_total.append(loss2)
+            if np.sum(policy_calculated) > 0:
+                #error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
+                error = -np.log(np.sum(output*batch[1], axis=1))
+                X,Y = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action)
+                loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
+                loss2_total.append(loss2)
             depth_total.append(depth[0])
             loss1_total.append(loss1[0])
             acc_total.append(loss1[2])

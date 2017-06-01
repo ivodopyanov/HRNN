@@ -40,6 +40,8 @@ class Encoder_Predictor(Encoder_Base):
         if data_mask.ndim == x.ndim-1:
             data_mask = K.expand_dims(data_mask)
         assert data_mask.ndim == x.ndim
+
+
         data_mask = data_mask.dimshuffle([1,0])
         data_mask = data_mask[:bucket_size]
 
@@ -48,6 +50,8 @@ class Encoder_Predictor(Encoder_Base):
         x = K.dot(x, self.W_emb) + self.b_emb
         x = x.dimshuffle([1,0,2])
         x = x[:bucket_size]
+
+        #x = Print("x")(x)
 
 
         initial_h = K.zeros((self.batch_size, self.hidden_dim))
@@ -73,18 +77,23 @@ class Encoder_Predictor(Encoder_Base):
         policy_used_mask = results[6]
         depth = results[7][-1]
 
-
+        data_mask = chosen_action
         '''data_mask = chosen_action.dimshuffle([2,0,1])
         data_mask = Print("final_data_mask")(data_mask)
         data_mask = data_mask.dimshuffle([1,2,0])'''
-        data_mask = chosen_action[-1]
+        data_mask = data_mask[-1]
 
         '''has_value = has_value.dimshuffle([2,0,1])
         has_value = Print("final_has_value")(has_value)
         has_value = has_value.dimshuffle([1,2,0])'''
         has_value = has_value[-1]
 
-        x = results[0][-1]
+        h = results[0]
+        '''h = h.dimshuffle([2,0,1,3])
+        h = Print("final_h")(h)
+        h = h.dimshuffle([1,2,0,3])'''
+        x = h[-1]
+
         data_mask = data_mask[-1]
 
 
@@ -93,7 +102,10 @@ class Encoder_Predictor(Encoder_Base):
                             sequences=[x, data_mask, has_value],
                             outputs_info=[initial_h, initial_final_has_value])
 
-        outputs = results[0][-1]
+        h = results[0]
+        #h = Print("final_h2")(h)
+        outputs = h[-1]
+
         return [outputs,
                 policy_input_x.dimshuffle([2,0,1,3]),
                 policy_input_h.dimshuffle([2,0,1,3]),
@@ -111,17 +123,19 @@ class Encoder_Predictor(Encoder_Base):
         initial_policy_input_h = K.zeros((self.batch_size, self.hidden_dim), name="initial_policy_input_h")
         initial_policy_used = K.zeros((self.batch_size), dtype="bool", name="initial_policy_used")
         initial_has_value = K.zeros((self.batch_size), dtype="bool")
+        initial_both = K.zeros((self.batch_size), dtype="bool")
 
         results, _ = T.scan(self.horizontal_step,
                             sequences=[x, x_mask, prev_has_value],
-                            outputs_info=[initial_h, initial_new_mask, initial_has_value, initial_policy_input_x, initial_policy_input_h, initial_policy, initial_policy_used])
+                            outputs_info=[initial_h, initial_new_mask, initial_has_value, initial_both, initial_policy_input_x, initial_policy_input_h, initial_policy, initial_policy_used])
         new_h = results[0]
         new_mask = results[1]
         has_value = results[2]
-        policy_input_x = results[3]
-        policy_input_h = results[4]
-        policy = results[5]
-        policy_used = results[6]
+        both = results[3]
+        policy_input_x = results[4]
+        policy_input_h = results[5]
+        policy = results[6]
+        policy_used = results[7]
 
 
 
@@ -134,9 +148,9 @@ class Encoder_Predictor(Encoder_Base):
 
         depth = TS.cast(prev_depth+1, dtype="int8")
 
-        return [new_h, new_mask, has_value, policy_input_x, policy_input_h, policy, policy_used, depth]#, T.scan_module.until(TS.eq(TS.sum(x_mask), TS.sum(new_mask)))
+        return [new_h, new_mask, has_value, policy_input_x, policy_input_h, policy, policy_used, depth], T.scan_module.until(TS.eq(TS.sum(both), 0))
 
-    def horizontal_step(self, x, prev_mask, prev_has_value, h_tm1, mask_tm1, has_value_tm1, policy_input_x_tm1, policy_input_h_tm1, policy_tm1, policy_used_tm1):
+    def horizontal_step(self, x, prev_mask, prev_has_value, h_tm1, mask_tm1, has_value_tm1, both_tm1, policy_input_x_tm1, policy_input_h_tm1, policy_tm1, policy_used_tm1):
 
         if 0 < self.dropout_u < 1:
             ones = K.ones((self.hidden_dim))
@@ -181,6 +195,8 @@ class Encoder_Predictor(Encoder_Base):
         #both = Print("both")(both)
         #x_only = Print("x_only")(x_only)
         #h_only = Print("h_only")(h_only)
+        #x = Print("x")(x)
+        #h_tm1 = Print("h_tm1")(h_tm1)
 
         has_value = both + x_only + h_only
         has_value = TS.cast(has_value, "bool")
@@ -196,7 +212,9 @@ class Encoder_Predictor(Encoder_Base):
         h_only_for_h = TS.extra_ops.repeat(h_only_for_h, self.hidden_dim, axis=1)
 
         h_ = activations.relu(K.dot(x*B_W, self.W) + K.dot(h_tm1*B_U, self.U) + self.b)
-        h = both_for_h*h_ + x_only_for_h*x + h_only_for_h * h_
+        h = both_for_h*h_ + x_only_for_h*x + h_only_for_h * h_tm1
+
+        #h = Print("h")(h)
 
         #has_value_tm1 = Print("has_value_tm1")(has_value_tm1)
         #prev_mask = Print("prev_mask")(prev_mask)
@@ -205,7 +223,7 @@ class Encoder_Predictor(Encoder_Base):
         #x = Print("x")(x)
         #h_tm1 = Print("h_tm1")(h_tm1)
         #policy_used = Print("policy_used")(policy_used)
-        return h, new_mask, has_value, x, h_tm1, policy, TS.cast(policy_used, "bool")
+        return h, new_mask, has_value, TS.cast(both, "bool"), x, h_tm1, policy, TS.cast(policy_used, "bool")
 
 
 

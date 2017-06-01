@@ -288,9 +288,9 @@ def train(filename):
     objects = prepare_objects(data, settings)
     #load(objects, filename)
     sys.stdout.write('Compiling model\n')
-    run_training2(data, objects, settings)
+    #run_training2(data, objects, settings)
     #run_training_encoder_only(data, objects, settings)
-    #run_training_RL_only(data, objects, settings)
+    run_training_RL_only(data, objects, settings)
     #save(objects, filename)
 
 
