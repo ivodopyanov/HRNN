@@ -7,6 +7,7 @@ from collections import defaultdict
 import utils
 from io import open
 
+NUM_OF_LABELS = 5
 
 def prepare():
     data = load_dictionary()
@@ -75,9 +76,9 @@ def load_labels():
             if idx == 0:
                 continue
             label = float(row.split(u"|")[1])
-            label = floor(label*5)
-            if label == 5:
-                label = 4.0
+            label = floor(label*NUM_OF_LABELS)
+            if label == NUM_OF_LABELS:
+                label = NUM_OF_LABELS - 1.0
             result.append(label)
     return result
 

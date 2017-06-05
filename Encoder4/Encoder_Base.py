@@ -10,7 +10,7 @@ from theano.printing import Print
 
 
 class Encoder_Base(Layer):
-    def __init__(self, input_dim, inner_dim, hidden_dim, action_dim, depth, batch_size, max_len,
+    def __init__(self, input_dim, hidden_dim, action_dim, depth, batch_size, max_len,
                  dropout_w, dropout_u, dropout_action, l2, **kwargs):
         '''
         Layer also uses
@@ -24,7 +24,6 @@ class Encoder_Base(Layer):
         :param depth: tree hierarchy depth
         '''
         self.hidden_dim = hidden_dim
-        self.inner_dim = inner_dim
         self.input_dim = input_dim
         self.action_dim = action_dim
         self.depth = depth
@@ -52,25 +51,17 @@ class Encoder_Base(Layer):
                                      initializer=zeros(),
                                      name='b_emb_{}'.format(self.name))
 
-        self.W = self.add_weight(shape=(self.hidden_dim, self.inner_dim),
+        self.W = self.add_weight(shape=(self.hidden_dim, self.hidden_dim),
                                  initializer=glorot_uniform(),
                                  regularizer=l2(self.l2),
                                  name='W_{}'.format(self.name))
-        self.U = self.add_weight(shape=(self.hidden_dim, self.inner_dim),
+        self.U = self.add_weight(shape=(self.hidden_dim, self.hidden_dim),
                                  initializer=orthogonal(),
                                  regularizer=l2(self.l2),
                                  name='U_{}'.format(self.name))
-        self.b = self.add_weight(shape=(self.inner_dim),
+        self.b = self.add_weight(shape=(self.hidden_dim),
                                  initializer=zeros(),
                                  name='b_{}'.format(self.name))
-
-        self.W1 = self.add_weight(shape=(self.inner_dim, self.hidden_dim),
-                                 initializer=glorot_uniform(),
-                                 regularizer=l2(self.l2),
-                                 name='W1_{}'.format(self.name))
-        self.b1 = self.add_weight(shape=(self.hidden_dim),
-                                 initializer=zeros(),
-                                 name='b1_{}'.format(self.name))
 
 
         self.W_action_1 = self.add_weight(shape=(self.hidden_dim, self.action_dim),
@@ -86,11 +77,11 @@ class Encoder_Base(Layer):
                                           trainable=False,
                                           name='b_action_2_{}'.format(self.name))
 
-        self.W_action_3 = self.add_weight(shape=(self.action_dim, 2),
+        self.W_action_3 = self.add_weight(shape=(self.action_dim, 1),
                                           initializer=glorot_uniform(),
                                           trainable=False,
                                           name='W_action_3_{}'.format(self.name))
-        self.b_action_3 = self.add_weight(shape=(2,),
+        self.b_action_3 = self.add_weight(shape=(1,),
                                           initializer=zeros(),
                                           trainable=False,
                                           name='b_action_3_{}'.format(self.name))
@@ -129,42 +120,6 @@ class Encoder_Base(Layer):
 
         #h = Print("h")(h)
         return h, has_value
-
-
-    #Из маски 11111000000 делает маску 0000100000 (1 - на последнем элементе 1 исходной маски, остальное - 0)
-    def get_current_value_mask(self, mask):
-        result = 1 - mask
-        result = K.concatenate([result[:, 1:], K.ones((self.batch_size, 1), dtype="bool")], axis=1)
-        result = mask*result
-        result = TS.cast(result, "bool")
-        return result
-
-    def get_next_value_mask(self, mask):
-        result = K.concatenate([K.ones((self.batch_size, 1), dtype="bool"), mask[:,:-1]], axis=1)
-        return self.get_current_value_mask(result)
-
-    def get_prev_value_mask(self, mask):
-        result = K.concatenate([mask[:, 1:], K.zeros((self.batch_size, 1), dtype="bool")], axis=1)
-        return self.get_current_value_mask(result)
-
-    def get_value_by_bitmask(self, data, mask):
-        mask = mask.dimshuffle([0,1,'x'])
-        mask = TS.extra_ops.repeat(mask, self.hidden_dim, axis=2)
-        value = K.switch(mask, data, 0)
-        value = K.sum(value, axis=1)
-        return value
-
-    def insert_tensor_at_mask(self, data, mask, tensor, bucket_size):
-        # Получаем матрицу из тензора (который надо вставить), скопированных bucket_size раз
-        tensor = tensor.dimshuffle((0, 'x', 1))
-        tensor = TS.extra_ops.repeat(tensor, bucket_size, axis=1)
-        # Получаем маску, куда надо вставить этот тензор
-        mask = mask.dimshuffle([0,1,'x'])
-        mask = TS.extra_ops.repeat(mask, self.hidden_dim, axis=2)
-        # Вставляем, используя switch
-        result = K.switch(mask, tensor, data)
-        return result
-
 
 
     def get_config(self):

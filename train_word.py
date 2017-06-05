@@ -8,6 +8,8 @@ import numpy as np
 from keras.layers import Dense, Dropout, Input, Activation, Embedding, SpatialDropout1D
 from keras.models import Model
 from keras.optimizers import Adam
+import keras.backend as K
+from theano.printing import Print
 
 import utils
 from Encoder3.Encoder_Predictor import Encoder_Predictor
@@ -18,7 +20,6 @@ from train_utils import run_training2, copy_weights_encoder_to_predictor_wordbas
 CASES_FILENAME = "cases.txt"
 QUOTES = ["'", '“', '"']
 GLOVE_FILE = "glove.6B.200d.txt"
-
 
 
 def get_data(settings):
@@ -84,6 +85,7 @@ def init_settings():
     settings = {}
     settings['word_embedding_size'] = 32
     settings['sentence_embedding_size'] = 64
+    settings['inner_dim'] = 64
     settings['depth'] = 6
     settings['action_dim'] = 64
     settings['dropout_W'] = 0.0
@@ -102,7 +104,8 @@ def init_settings():
     settings['copy_etp'] = copy_weights_encoder_to_predictor_wordbased
     settings['with_embedding'] = False
     settings['l2'] = 0.00001
-    settings['epoch_mult'] = 10
+    settings['epoch_mult'] = 1
+    settings['rl_gamma']=0.8
     return settings
 
 def prepare_objects(data, settings):
@@ -148,6 +151,7 @@ def build_encoder(data, settings):
         embedding = SpatialDropout1D(settings['dropout_emb'])(embedding)
 
     encoder = Encoder_Processor(input_dim=settings['word_embedding_size'],
+                                inner_dim=settings['inner_dim'],
                                 hidden_dim=settings['sentence_embedding_size'],
                                 depth=settings['depth'],
                                 action_dim=settings['action_dim'],
@@ -168,7 +172,8 @@ def build_encoder(data, settings):
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
     model = Model(inputs=[data_input, bucket_size_input], outputs=[output, encoder[1]])
     optimizer = Adam()
-    model.compile(loss={"output":"categorical_crossentropy", "encoder": None}, optimizer=optimizer, metrics={"output":'accuracy'})
+
+    model.compile(loss={"output": "categorical_crossentropy", "encoder": None}, optimizer=optimizer, metrics={"output":'accuracy'})
     return model
 
 def build_predictor(data, settings):
@@ -190,6 +195,7 @@ def build_predictor(data, settings):
     if settings['dropout_emb'] > 0:
         embedding = SpatialDropout1D(settings['dropout_emb'])(embedding)
     encoder = Encoder_Predictor(input_dim=settings['word_embedding_size'],
+                                inner_dim=settings['inner_dim'],
                                 hidden_dim=settings['sentence_embedding_size'],
                                 depth=settings['depth'],
                                 action_dim=settings['action_dim'],
@@ -210,7 +216,7 @@ def build_predictor(data, settings):
     layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
     model = Model(inputs=[data_input, bucket_size_input],
-                  outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6]])
+                  outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6], encoder[7]])
     return model
 
 
@@ -271,7 +277,7 @@ def build_batch(data, settings, sentence_batch):
                 X[i][idx] = data['word_corpus_encode'][word]+1
             else:
                 X[i][idx] = settings['max_features']+1
-        Y[i][data['labels'].index(sentence_tuple[1])] = True
+            Y[i][data['labels'].index(sentence_tuple[1])] = True
     return X, Y
 
 
@@ -286,11 +292,14 @@ def train(filename):
     settings['with_sentences']=True
     data, settings = get_data(settings)
     objects = prepare_objects(data, settings)
+    #objects['encoder'].load_weights("encoder.h5")
+    #objects['predictor'].load_weights("predictor.h5")
+    #objects['rl_model'].load_weights("rl_model.h5")
     #load(objects, filename)
     sys.stdout.write('Compiling model\n')
-    #run_training2(data, objects, settings)
+    run_training2(data, objects, settings)
     #run_training_encoder_only(data, objects, settings)
-    run_training_RL_only(data, objects, settings)
+    #run_training_RL_only(data, objects, settings)
     #save(objects, filename)
 
 

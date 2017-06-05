@@ -10,9 +10,7 @@ from keras.models import Model
 from keras.optimizers import Adam
 
 import utils
-from Encoder.Encoder_Predictor import Encoder_Predictor
-from Encoder.Encoder_Processor import Encoder_Processor
-from Encoder.Encoder_RL_layer import Encoder_RL_Layer
+from Encoder4.Encoder_Processor import Encoder_Processor
 from train_utils import run_training2, copy_weights_encoder_to_predictor_wordbased, run_training_encoder_only, run_training_RL_only
 
 CASES_FILENAME = "cases.txt"
@@ -86,19 +84,19 @@ def init_settings():
     settings['sentence_embedding_size'] = 64
     settings['depth'] = 6
     settings['action_dim'] = 64
-    settings['dropout_W'] = 0.2
+    settings['dropout_W'] = 0.0
     settings['dropout_U'] = 0.0
     settings['dropout_action'] = 0.0
     settings['dropout_emb'] = 0.0
     settings['hidden_dims'] = [64]
     settings['dense_dropout'] = 0.0
     settings['bucket_size_step'] = 4
-    settings['batch_size'] = 6
+    settings['batch_size'] = 4
     settings['max_len'] = 128
     settings['max_features']=10000
     settings['with_sentences']=False
     settings['epochs'] = 50
-    settings['random_action_prob'] = 0.3
+    settings['random_action_prob'] = 0.0
     settings['copy_etp'] = copy_weights_encoder_to_predictor_wordbased
     settings['with_embedding'] = False
     settings['l2'] = 0.00001
@@ -114,7 +112,7 @@ def prepare_objects(data, settings):
     train_indexes = indexes[:train_segment]
     val_indexes = indexes[train_segment:]
 
-    model = build_model(data, settings)
+    model = build_encoder(data, settings)
     data_gen = build_generator_HRNN(data, settings, train_indexes)
     val_gen = build_generator_HRNN(data, settings, val_indexes)
 
@@ -124,9 +122,10 @@ def prepare_objects(data, settings):
             'train_indexes': train_indexes,
             'val_indexes': val_indexes}
 
-def build_model(data, settings):
+def build_encoder(data, settings):
     sys.stdout.write('Building model\n')
     data_input = Input(shape=(settings['max_len'],))
+    bucket_size_input = Input(shape=(1,),dtype="int32")
     if 'emb_matrix' in data:
         embedding = Embedding(input_dim=settings['max_features']+2,
                           output_dim=settings['word_embedding_size'],
@@ -142,11 +141,18 @@ def build_model(data, settings):
     if settings['dropout_emb'] > 0:
         embedding = SpatialDropout1D(settings['dropout_emb'])(embedding)
 
-    encoder = GRU(units=settings['sentence_embedding_size'],
-                                recurrent_dropout=settings['dropout_U'],
-                                dropout=settings['dropout_W'],
-                                name='encoder')(embedding)
-    layer = encoder
+    encoder = Encoder_Processor(input_dim=settings['word_embedding_size'],
+                                hidden_dim=settings['sentence_embedding_size'],
+                                depth=settings['depth'],
+                                action_dim=settings['action_dim'],
+                                batch_size = settings['batch_size'],
+                                max_len=settings['max_len'],
+                                dropout_u=settings['dropout_U'],
+                                dropout_w=settings['dropout_W'],
+                                dropout_action=settings['dropout_action'],
+                                l2=settings['l2'],
+                                name='encoder')([embedding, bucket_size_input])
+    layer = encoder[0]
 
     for idx, hidden_dim in enumerate(settings['hidden_dims']):
         layer = Dropout(settings['dense_dropout'])(layer)
@@ -154,9 +160,10 @@ def build_model(data, settings):
         layer = Activation('tanh')(layer)
     layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(inputs=data_input, outputs=output)
+    model = Model(inputs=[data_input, bucket_size_input], outputs=[output, encoder[1]])
     optimizer = Adam()
-    model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=['accuracy'])
+
+    model.compile(loss={"output": "categorical_crossentropy", "encoder": None}, optimizer=optimizer, metrics={"output":'accuracy'})
     return model
 
 
@@ -164,7 +171,7 @@ def build_generator_HRNN(data, settings, indexes):
     def generator():
         walk_order = list(indexes)
         np.random.shuffle(walk_order)
-        bucket = []
+        buckets = {}
         while True:
             idx = walk_order.pop()-1
             row = data['sentences'][idx]
@@ -175,11 +182,21 @@ def build_generator_HRNN(data, settings, indexes):
                 np.random.shuffle(walk_order)
             if len(sentence) > settings['max_len']:
                 continue
-            bucket.append((sentence, label))
-            if len(bucket)==settings['batch_size']:
-                X, Y = build_batch(data, settings, bucket)
-                bucket = []
-                yield X, Y
+            bucket_size = ceil((len(sentence)+1.0) / settings['bucket_size_step'])*settings['bucket_size_step']
+            if bucket_size not in buckets:
+                buckets[bucket_size] = []
+            buckets[bucket_size].append((sentence, label))
+            if len(buckets[bucket_size])==settings['batch_size']:
+                X, Y = build_batch(data, settings, buckets[bucket_size])
+                batch_sentences = buckets[bucket_size]
+                buckets[bucket_size] = []
+
+                bucket_size_input = np.zeros((settings['batch_size'],1), dtype=int)
+                bucket_size_input[0][0]=bucket_size
+                if settings['with_sentences']:
+                    yield [X, bucket_size_input], Y, batch_sentences
+                else:
+                    yield [X, bucket_size_input], Y
     return generator()
 
 def build_batch(data, settings, sentence_batch):
@@ -191,7 +208,7 @@ def build_batch(data, settings, sentence_batch):
                 X[i][idx] = data['word_corpus_encode'][word]+1
             else:
                 X[i][idx] = settings['max_features']+1
-        Y[i][data['labels'].index(sentence_tuple[1])] = True
+            Y[i][data['labels'].index(sentence_tuple[1])] = True
     return X, Y
 
 def run_training_simple(data, objects, settings):
@@ -209,7 +226,7 @@ def run_training_simple(data, objects, settings):
             batch = next(objects['data_gen'])
             loss1 = model.train_on_batch(batch[0], batch[1])
             loss_total.append(loss1[0])
-            acc_total.append(loss1[1])
+            acc_total.append(loss1[2])
 
             if len(loss_total) == 0:
                 avg_loss = 0
@@ -232,7 +249,7 @@ def run_training_simple(data, objects, settings):
             loss = model.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
 
             loss_total.append(loss[0])
-            acc_total.append(loss[1])
+            acc_total.append(loss[2])
             sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}"
                              .format(i+1, val_epoch_size,
                                      np.sum(loss_total)*1.0/len(loss_total),

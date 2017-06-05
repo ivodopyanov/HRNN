@@ -104,12 +104,12 @@ class Encoder_Processor(Encoder_Base):
     def horizontal_step(self, x, prev_mask, prev_has_value, h_tm1, new_mask_tm1, has_value_tm1, both_tm1):
 
         if 0 < self.dropout_u < 1:
-            ones = K.ones((self.inner_dim))
+            ones = K.ones((self.hidden_dim))
             B_U = K.in_train_phase(K.dropout(ones, self.dropout_u), ones)
         else:
             B_U = K.cast_to_floatx(1.)
         if 0 < self.dropout_w < 1:
-            ones = K.ones((self.inner_dim))
+            ones = K.ones((self.hidden_dim))
             B_W = K.in_train_phase(K.dropout(ones, self.dropout_w), ones)
         else:
             B_W = K.cast_to_floatx(1.)
@@ -118,18 +118,12 @@ class Encoder_Processor(Encoder_Base):
             B_action = K.in_train_phase(K.dropout(ones, self.dropout_action), ones)
         else:
             B_action = K.cast_to_floatx(1.)
-        if 0 < self.dropout_w < 1:
-            ones = K.ones((self.hidden_dim))
-            B_W1 = K.in_train_phase(K.dropout(ones, self.dropout_w), ones)
-        else:
-            B_W1 = K.cast_to_floatx(1.)
 
         policy = activations.relu(K.dot(x*B_W, self.W_action_1) + K.dot(h_tm1*B_U, self.U_action_1) + self.b_action_1)
-        policy = K.exp(K.minimum(K.dot(policy*B_action, self.W_action_3)+self.b_action_3,5))
-        #policy = K.exp(K.minimum(K.dot(x*B_W, self.W_action_1) + K.dot(h_tm1*B_U, self.U_action_1) + self.b_action_1, 5))
+        policy = K.sigmoid(K.dot(policy*B_action, self.W_action_3)+self.b_action_3)
 
         # 1 = reduce, 0 = continue acc
-        new_mask = K.switch(TS.le(policy[:,0], policy[:, 1]), 1, 0)
+        new_mask = K.reshape(policy, (self.batch_size,))
         new_mask = prev_mask*new_mask
         new_mask = TS.cast(new_mask, "bool")
 
@@ -158,7 +152,6 @@ class Encoder_Processor(Encoder_Base):
         h_only_for_h = TS.extra_ops.repeat(h_only_for_h, self.hidden_dim, axis=1)
 
         h_ = activations.relu(K.dot(x*B_W, self.W) + K.dot(h_tm1*B_U, self.U) + self.b)
-        h_ = activations.relu(K.dot(h_*B_W1, self.W1) + self.b1)
         h = both_for_h*h_ + x_only_for_h*x + h_only_for_h*h_tm1
 
         return h, new_mask, has_value, TS.cast(both, "bool")
