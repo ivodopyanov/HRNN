@@ -28,6 +28,7 @@ class Encoder_RL_Layer(Layer):
                                           regularizer=l2(self.l2),
                                           name='W_action_1_{}'.format(self.name))
         self.U_action_1 = self.add_weight(shape=(self.hidden_dim, self.action_dim),
+                                          regularizer=l2(self.l2),
                                           initializer=orthogonal(),
                                           name='U_action_1_{}'.format(self.name))
         self.b_action_1 = self.add_weight(shape=(self.action_dim,),
@@ -35,6 +36,7 @@ class Encoder_RL_Layer(Layer):
                                           name='b_action_2_{}'.format(self.name))
 
         self.W_action_3 = self.add_weight(shape=(self.action_dim, 2),
+                                          regularizer=l2(self.l2),
                                           initializer=glorot_uniform(),
                                           name='W_action_3_{}'.format(self.name))
         self.b_action_3 = self.add_weight(shape=(2,),

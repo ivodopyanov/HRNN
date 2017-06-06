@@ -74,10 +74,12 @@ class Encoder_Base(Layer):
 
 
         self.W_action_1 = self.add_weight(shape=(self.hidden_dim, self.action_dim),
+                                          regularizer=l2(self.l2),
                                           initializer=glorot_uniform(),
                                           trainable=False,
                                           name='W_action_1_{}'.format(self.name))
         self.U_action_1 = self.add_weight(shape=(self.hidden_dim, self.action_dim),
+                                          regularizer=l2(self.l2),
                                           initializer=orthogonal(),
                                           trainable=False,
                                           name='U_action_1_{}'.format(self.name))
@@ -87,6 +89,7 @@ class Encoder_Base(Layer):
                                           name='b_action_2_{}'.format(self.name))
 
         self.W_action_3 = self.add_weight(shape=(self.action_dim, 2),
+                                          regularizer=l2(self.l2),
                                           initializer=glorot_uniform(),
                                           trainable=False,
                                           name='W_action_3_{}'.format(self.name))

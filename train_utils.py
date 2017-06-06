@@ -118,7 +118,7 @@ def run_training2(data, objects, settings):
             if np.sum(policy_calculated) > 0:
                 error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
                 #error = -np.log(np.sum(output*batch[1], axis=1))
-                X,Y,sample_weight = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
+                X,Y,sample_weight = restore_exp3(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
                 loss2 = rl_model.train_on_batch(X,Y)
                 loss2_total.append(loss2)
                 copy_weights_rl_to_predictor(objects)
@@ -164,7 +164,7 @@ def run_training2(data, objects, settings):
             if np.sum(policy_calculated) > 0:
                 error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
                 #error = -np.log(np.sum(output*batch[1], axis=1))
-                X,Y,sample_weight = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
+                X,Y,sample_weight = restore_exp3(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
                 loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
 
                 loss2_total.append(loss2)
@@ -275,7 +275,7 @@ def run_training_RL_only(data, objects, settings):
             if np.sum(policy_calculated) > 0:
                 error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
                 #error = -np.log(np.sum(output*batch[1], axis=1))
-                X,Y,sample_weight = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
+                X,Y,sample_weight = restore_exp3(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
                 loss2 = rl_model.train_on_batch(X,Y)
                 loss2_total.append(loss2)
                 copy_weights_rl_to_predictor(objects)
@@ -313,7 +313,7 @@ def run_training_RL_only(data, objects, settings):
             if np.sum(policy_calculated) > 0:
                 #error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
                 error = -np.log(np.sum(output*batch[1], axis=1))
-                X,Y,sample_weight = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
+                X,Y,sample_weight = restore_exp3(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
                 loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
                 loss2_total.append(loss2)
             depth_total.append(depth[0])
@@ -340,6 +340,80 @@ def restore_exp(settings, x, total_error, h, policy, fk_calculated, chosen_actio
     error_mult = error_mult# * policy_depth
     error_mult = np.repeat(np.expand_dims(error_mult, axis=2), fk_calculated.shape[2], axis=2)
     #chosen_action = np.less_equal(policy[:,:,:,0], policy[:,:,:,1])
+    shift_action_mask = np.ones_like(error_mult)*chosen_action
+    reduce_action_mask = np.ones_like(error_mult)*(1-chosen_action)
+    shift_action_policy = np.concatenate((np.expand_dims(shift_action_mask*error_mult, axis=3), np.expand_dims(policy[:,:,:,1], axis=3)), axis=3)
+    shift_action_policy = np.repeat(np.expand_dims(shift_action_mask, axis=3), 2, axis=3)*shift_action_policy
+    reduce_action_policy = np.concatenate((np.expand_dims(policy[:,:,:,0], axis=3), np.expand_dims(reduce_action_mask*error_mult, axis=3)), axis=3)
+    reduce_action_policy = np.repeat(np.expand_dims(reduce_action_mask, axis=3), 2, axis=3)*reduce_action_policy
+    new_policy = shift_action_policy + reduce_action_policy
+    decision_performed = np.where(fk_calculated == 1)
+    x_value_input = x[decision_performed]
+    h_value_input = h[decision_performed]
+    sample_weight = policy_depth[decision_performed]
+    policy_output = new_policy[decision_performed]
+    return [x_value_input, h_value_input], policy_output, sample_weight
+
+
+def restore_exp3(settings, x, total_error, h, policy, fk_calculated, chosen_action, policy_depth):
+    num_of_decisions = np.sum(fk_calculated, axis=(1,2))
+    predicted_error = np.min(policy, axis=-1)
+    predicted_error = predicted_error * fk_calculated
+    predicted_error = np.sum(predicted_error, axis=(1,2))
+
+    #depth_mult = np.logspace(fk_calculated.shape[1]-1, 0, num=fk_calculated.shape[1], base=settings['rl_gamma'])
+    #depth_mult = np.repeat(np.expand_dims(depth_mult, axis=0), fk_calculated.shape[0], axis=0)
+    #depth_mult = np.repeat(np.expand_dims(depth_mult, axis=2), fk_calculated.shape[2], axis=2)
+    total_error = (total_error - predicted_error) / num_of_decisions
+
+    total_error[total_error == np.inf] = 0
+    error_mult = np.repeat(np.expand_dims(total_error, axis=1), fk_calculated.shape[1], axis=1)
+    error_mult = error_mult# * policy_depth
+    error_mult = np.repeat(np.expand_dims(error_mult, axis=2), fk_calculated.shape[2], axis=2)
+    #chosen_action = np.less_equal(policy[:,:,:,0], policy[:,:,:,1])
+    shift_action_mask = np.ones_like(error_mult)*chosen_action
+    reduce_action_mask = np.ones_like(error_mult)*(1-chosen_action)
+    shift_action_policy = np.concatenate((np.expand_dims(shift_action_mask*error_mult, axis=3), np.expand_dims(np.zeros_like(policy[:,:,:,1]), axis=3)), axis=3)
+    shift_action_policy = np.repeat(np.expand_dims(shift_action_mask, axis=3), 2, axis=3)*shift_action_policy
+    reduce_action_policy = np.concatenate((np.expand_dims(np.zeros_like(policy[:,:,:,0]), axis=3), np.expand_dims(reduce_action_mask*error_mult, axis=3)), axis=3)
+    reduce_action_policy = np.repeat(np.expand_dims(reduce_action_mask, axis=3), 2, axis=3)*reduce_action_policy
+    policy_update = shift_action_policy + reduce_action_policy
+    new_policy = policy+policy_update
+    decision_performed = np.where(fk_calculated == 1)
+    x_value_input = x[decision_performed]
+    h_value_input = h[decision_performed]
+    sample_weight = policy_depth[decision_performed]
+    policy_output = new_policy[decision_performed]
+    return [x_value_input, h_value_input], policy_output, sample_weight
+
+
+def restore_exp2(settings, x, total_error, h, policy, fk_calculated, chosen_action, policy_depth):
+    max_policy = np.max(policy, axis=3)
+    next_step_max_policy_reduce_buf = max_policy[:,1:,:]*chosen_action[:,:-1,:]
+    next_step_max_policy_reduce = np.zeros_like(max_policy)
+    next_step_max_policy_reduce[:,:-1,:] = next_step_max_policy_reduce_buf
+
+    next_step_max_policy_shift_buf = max_policy[:,:,1:]*(1-chosen_action)[:,:,:-1]
+    next_step_max_policy_shift = np.zeros_like(max_policy)
+    next_step_max_policy_shift[:,:,:-1] = next_step_max_policy_shift_buf
+    next_step_max_policy = next_step_max_policy_shift + next_step_max_policy_reduce
+
+    max_depth = np.max(policy_depth, axis=(1,2))
+    max_depth = np.repeat(np.expand_dims(max_depth, axis=1), policy_depth.shape[1], axis=1)
+    max_depth = np.repeat(np.expand_dims(max_depth, axis=2), policy_depth.shape[2], axis=2)
+
+    last_policy_calculated = (policy_depth == max_depth)*fk_calculated
+
+
+    error_mult = np.repeat(np.expand_dims(total_error, axis=1), fk_calculated.shape[1], axis=1)
+    error_mult = error_mult# * policy_depth
+    error_mult = np.repeat(np.expand_dims(error_mult, axis=2), fk_calculated.shape[2], axis=2)
+    reward = last_policy_calculated * error_mult
+
+
+    total_reward = next_step_max_policy*settings['rl_gamma']+reward
+    error_mult = total_reward
+
     shift_action_mask = np.ones_like(error_mult)*chosen_action
     reduce_action_mask = np.ones_like(error_mult)*(1-chosen_action)
     shift_action_policy = np.concatenate((np.expand_dims(shift_action_mask*error_mult, axis=3), np.expand_dims(policy[:,:,:,1], axis=3)), axis=3)
