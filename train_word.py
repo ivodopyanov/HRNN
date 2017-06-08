@@ -84,18 +84,18 @@ def update_corpus_with_glove(settings, data):
 def init_settings():
     settings = {}
     settings['word_embedding_size'] = 32
-    settings['sentence_embedding_size'] = 64
-    settings['inner_dim'] = 64
+    settings['sentence_embedding_size'] = 32
+    settings['inner_dim'] = 128
     settings['depth'] = 6
-    settings['action_dim'] = 64
+    settings['action_dim'] = 128
     settings['dropout_W'] = 0.0
     settings['dropout_U'] = 0.0
     settings['dropout_action'] = 0.0
     settings['dropout_emb'] = 0.0
-    settings['hidden_dims'] = [64]
+    settings['hidden_dims'] = [128]
     settings['dense_dropout'] = 0.0
     settings['bucket_size_step'] = 4
-    settings['batch_size'] = 4
+    settings['batch_size'] = 32
     settings['max_len'] = 128
     settings['max_features']=10000
     settings['with_sentences']=False

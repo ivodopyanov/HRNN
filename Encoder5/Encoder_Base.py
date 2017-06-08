@@ -105,31 +105,25 @@ class Encoder_Base(Layer):
 
     def final_step(self, x, x_mask, prev_has_value, h_tm1, has_value_tm1):
         if 0 < self.dropout_u < 1:
-            ones = K.ones((self.inner_dim))
+            ones = K.ones((self.hidden_dim))
             B_U = K.in_train_phase(K.dropout(ones, self.dropout_u), ones)
         else:
             B_U = K.cast_to_floatx(1.)
         if 0 < self.dropout_w < 1:
-            ones = K.ones((self.inner_dim))
+            ones = K.ones((self.hidden_dim))
             B_W = K.in_train_phase(K.dropout(ones, self.dropout_w), ones)
         else:
             B_W = K.cast_to_floatx(1.)
-        if 0 < self.dropout_w < 1:
-            ones = K.ones((self.hidden_dim))
-            B_W1 = K.in_train_phase(K.dropout(ones, self.dropout_w), ones)
-        else:
-            B_W1 = K.cast_to_floatx(1.)
 
         #x = Print("x")(x)
         #has_value_tm1 = Print("has_value_tm1")(has_value_tm1)
         #x_mask = Print("x_mask")(x_mask)
         #prev_has_value = Print("prev_has_value")(prev_has_value)
-        h_ = activations.relu(K.dot(x*B_W, self.W) + K.dot(h_tm1*B_U, self.U) + self.b)
-        h_ = activations.relu(K.dot(h_*B_W1, self.W1) + self.b1)
+        h = K.relu(K.dot(x*B_W, self.W) + K.dot(h_tm1*B_U, self.U) + self.b)
 
         has_value_tm1_for_h = K.expand_dims(has_value_tm1)
         has_value_tm1_for_h = K.repeat_elements(has_value_tm1_for_h, self.hidden_dim, 1)
-        h = K.switch(has_value_tm1_for_h, h_, x)
+        h = K.switch(has_value_tm1_for_h, h, x)
 
         mask_for_h = K.expand_dims(x_mask*prev_has_value)
         mask_for_h = K.repeat_elements(mask_for_h, self.hidden_dim, 1)
@@ -140,7 +134,22 @@ class Encoder_Base(Layer):
         #h = Print("h")(h)
         return h, has_value
 
+    def gru_step(self, x, h_tm1, B_W, B_U):
+        s1 = self.ln(K.dot(x*B_W, self.W) + self.b, self.gammas[0], self.betas[0])
+        s2 = self.ln(K.dot(h_tm1*B_U, self.U[:,:2*self.hidden_dim]), self.gammas[1,:2*self.hidden_dim], self.betas[1,:2*self.hidden_dim])
+        s = K.hard_sigmoid(s1[:,:2*self.hidden_dim] + s2)
+        z = s[:,:self.hidden_dim]
+        r = s[:,self.hidden_dim:2*self.hidden_dim]
+        h_ = z*h_tm1 + (1-z)*K.tanh(s1[:,2*self.hidden_dim:] + self.ln(K.dot(r*h_tm1*B_U, self.U[:,2*self.hidden_dim:]), self.gammas[1,2*self.hidden_dim:], self.betas[1,2*self.hidden_dim:]))
+        return h_
 
+    # Linear Normalization
+    def ln(self, x, gammas, betas):
+        m = K.mean(x, axis=-1, keepdims=True)
+        std = K.sqrt(K.var(x, axis=-1, keepdims=True) + self.epsilon)
+        x_normed = (x - m) / (std + self.epsilon)
+        x_normed = gammas * x_normed + betas
+        return x_normed
 
 
     def get_config(self):
