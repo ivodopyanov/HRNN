@@ -155,6 +155,8 @@ def run_training2(data, objects, settings):
             except ValueError:
                 sys.stdout.write("ValueError3!\n")
                 continue
+            if isnan(loss1[0]):
+                continue
 
             output = y_pred[0]
             input_x = y_pred[1]
