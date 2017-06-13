@@ -168,9 +168,9 @@ def run_training2(data, objects, settings):
                 error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
                 #error = -np.log(np.sum(output*batch[1], axis=1))
                 X,Y,sample_weight = restore_exp3(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
-                loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
-
-                loss2_total.append(loss2)
+                if Y.shape[0] > 1:
+                    loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
+                    loss2_total.append(loss2)
             loss1_total.append(loss1[0])
             acc_total.append(loss1[2])
             depth_total.append(depth[0])
