@@ -84,15 +84,15 @@ def update_corpus_with_glove(settings, data):
 def init_settings():
     settings = {}
     settings['word_embedding_size'] = 32
-    settings['sentence_embedding_size'] = 32
-    settings['inner_dim'] = 128
+    settings['sentence_embedding_size'] = 64
+    settings['inner_dim'] = 64
     settings['depth'] = 6
-    settings['action_dim'] = 128
+    settings['action_dim'] = 64
     settings['dropout_W'] = 0.0
     settings['dropout_U'] = 0.0
     settings['dropout_action'] = 0.0
     settings['dropout_emb'] = 0.0
-    settings['hidden_dims'] = [128]
+    settings['hidden_dims'] = [64]
     settings['dense_dropout'] = 0.0
     settings['bucket_size_step'] = 4
     settings['batch_size'] = 32
@@ -104,7 +104,7 @@ def init_settings():
     settings['copy_etp'] = copy_weights_encoder_to_predictor_wordbased
     settings['with_embedding'] = False
     settings['l2'] = 0.00001
-    settings['epoch_mult'] = 1
+    settings['epoch_mult'] = 10
     settings['rl_gamma']=0.8
     return settings
 

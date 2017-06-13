@@ -87,6 +87,8 @@ def run_training2(data, objects, settings):
         for j in range(epoch_size):
             batch = next(objects['data_gen'])
             loss1 = encoder.train_on_batch(batch[0], batch[1])
+            if isnan(loss1[0]) or isnan(loss1[2]):
+                continue
             loss1_total.append(loss1[0])
             acc_total.append(loss1[2])
 
@@ -119,10 +121,11 @@ def run_training2(data, objects, settings):
                 error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
                 #error = -np.log(np.sum(output*batch[1], axis=1))
                 X,Y,sample_weight = restore_exp3(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
-                loss2 = rl_model.train_on_batch(X,Y)
-                loss2_total.append(loss2)
-                copy_weights_rl_to_predictor(objects)
-                copy_weights_rl_to_encoder(objects)
+                if Y.shape[0] > 1:
+                    loss2 = rl_model.train_on_batch(X,Y)
+                    loss2_total.append(loss2)
+                    copy_weights_rl_to_predictor(objects)
+                    copy_weights_rl_to_encoder(objects)
 
 
             if len(loss2_total) == 0:
