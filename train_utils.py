@@ -130,8 +130,8 @@ def run_training2(data, objects, settings):
             if np.sum(policy_calculated) > 0:
                 error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
                 #error = -np.log(np.sum(output*batch[1], axis=1))
-                X,Y,sample_weight = restore_exp3(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
-                loss2 = rl_model.train_on_batch(X,Y)
+                X,Y,sample_weight = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
+                loss2 = rl_model.train_on_batch(X,Y,sample_weight=sample_weight)
                 if isnan(loss2):
                     continue
                 loss2_total.append(loss2)
@@ -181,8 +181,8 @@ def run_training2(data, objects, settings):
             if np.sum(policy_calculated) > 0:
                 error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
                 #error = -np.log(np.sum(output*batch[1], axis=1))
-                X,Y,sample_weight = restore_exp3(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
-                loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
+                X,Y,sample_weight = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
+                loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0,sample_weight=sample_weight)
                 if isnan(loss2):
                     continue
                 loss2_total.append(loss2)
@@ -293,8 +293,8 @@ def run_training_RL_only(data, objects, settings):
             if np.sum(policy_calculated) > 0:
                 error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
                 #error = -np.log(np.sum(output*batch[1], axis=1))
-                X,Y,sample_weight = restore_exp3(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
-                loss2 = rl_model.train_on_batch(X,Y)
+                X,Y,sample_weight = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
+                loss2 = rl_model.train_on_batch(X,Y,sample_weight=sample_weight)
                 loss2_total.append(loss2)
                 copy_weights_rl_to_predictor(objects)
                 copy_weights_rl_to_encoder(objects)
@@ -331,8 +331,8 @@ def run_training_RL_only(data, objects, settings):
             if np.sum(policy_calculated) > 0:
                 #error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
                 error = -np.log(np.sum(output*batch[1], axis=1))
-                X,Y,sample_weight = restore_exp3(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
-                loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
+                X,Y,sample_weight = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
+                loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0,sample_weight=sample_weight)
                 loss2_total.append(loss2)
             depth_total.append(depth[0])
             loss1_total.append(loss1[0])
