@@ -11,7 +11,7 @@ from theano.printing import Print
 
 
 class Encoder_Base(Layer):
-    def __init__(self, input_dim, inner_dim, hidden_dim, action_dim, depth, batch_size, max_len,
+    def __init__(self,  input_dim, inner_dim, hidden_dim, action_dim, depth, batch_size, max_len,
                  dropout_w, dropout_u, dropout_action, l2, **kwargs):
         '''
         Layer also uses
@@ -53,15 +53,15 @@ class Encoder_Base(Layer):
                                      initializer=zeros(),
                                      name='b_emb_{}'.format(self.name))
 
-        self.W = self.add_weight(shape=(self.hidden_dim, self.inner_dim),
+        self.W = self.add_weight(shape=(self.hidden_dim, 3*self.inner_dim),
                                  initializer=glorot_uniform(),
                                  regularizer=l2(self.l2),
                                  name='W_{}'.format(self.name))
-        self.U = self.add_weight(shape=(self.hidden_dim, self.inner_dim),
+        self.U = self.add_weight(shape=(self.hidden_dim, 3*self.inner_dim),
                                  initializer=orthogonal(),
                                  regularizer=l2(self.l2),
                                  name='U_{}'.format(self.name))
-        self.b = self.add_weight(shape=(self.inner_dim),
+        self.b = self.add_weight(shape=(3*self.inner_dim),
                                  initializer=zeros(),
                                  name='b_{}'.format(self.name))
 
@@ -87,7 +87,7 @@ class Encoder_Base(Layer):
         self.b_action_1 = self.add_weight(shape=(self.action_dim,),
                                           initializer=zeros(),
                                           trainable=False,
-                                          name='b_action_2_{}'.format(self.name))
+                                          name='b_action_1_{}'.format(self.name))
 
         self.W_action_3 = self.add_weight(shape=(self.action_dim, 2),
                                           regularizer=l2(self.l2),
@@ -103,7 +103,7 @@ class Encoder_Base(Layer):
 
 
 
-    def final_step(self, x, x_mask, h_tm1, has_value_tm1):
+    def final_step(self, x, x_mask, prev_has_value, h_tm1, has_value_tm1):
         if 0 < self.dropout_u < 1:
             ones = K.ones((self.inner_dim))
             B_U = K.in_train_phase(K.dropout(ones, self.dropout_u), ones)
@@ -125,22 +125,33 @@ class Encoder_Base(Layer):
         #has_value_tm1 = Print("has_value_tm1")(has_value_tm1)
         #x_mask = Print("x_mask")(x_mask)
         #prev_has_value = Print("prev_has_value")(prev_has_value)
-        h_ = activations.tanh(K.dot(x*B_W, self.W) + K.dot(h_tm1*B_U, self.U) + self.b)
-        h_ = activations.tanh(K.dot(h_*B_W1, self.W1) + self.b1)
+        h_ = self.gru_step(x, h_tm1,B_W,B_U,B_W1,self.W, self.U, self.b, self.W1, self.b1, self.inner_dim)
 
         has_value_tm1_for_h = K.expand_dims(has_value_tm1)
         has_value_tm1_for_h = K.repeat_elements(has_value_tm1_for_h, self.hidden_dim, 1)
         h = K.switch(has_value_tm1_for_h, h_, x)
 
-        mask_for_h = K.expand_dims(x_mask)
+        mask_for_h = K.expand_dims(x_mask*prev_has_value)
         #mask_for_h = Print("mask_for_h")(mask_for_h)
         mask_for_h = K.repeat_elements(mask_for_h, self.hidden_dim, 1)
         h = K.switch(mask_for_h, h, h_tm1)
-        has_value = K.switch(x_mask, 1, has_value_tm1)
+        has_value = K.switch(x_mask*prev_has_value, 1, has_value_tm1)
         has_value = TS.cast(has_value, "bool")
 
         #h = Print("h")(h)
         return h, has_value
+
+
+
+    def gru_step(self, x, h_tm1, B_W, B_U, B_W1, W, U, b, W1, b1, dim):
+        s1 = K.dot(x*B_W, W) + b
+        s2 = K.dot(h_tm1*B_U, U[:,:2*dim])
+        s = K.hard_sigmoid(s1[:,:2*dim] + s2)
+        z = s[:,:dim]
+        r = s[:,dim:2*dim]
+        h__ = K.tanh(s1[:,2*dim:] + K.dot(r*h_tm1*B_U, U[:,2*dim:]))
+        h_ = z*h_tm1 + (1-z)*K.tanh(K.dot(h__*B_W1, W1) + b1)
+        return h_
 
 
 

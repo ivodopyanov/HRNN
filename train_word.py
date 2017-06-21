@@ -12,15 +12,14 @@ import keras.backend as K
 from theano.printing import Print
 
 import utils
-from Encoder3.Encoder_Predictor import Encoder_Predictor
-from Encoder3.Encoder_Processor import Encoder_Processor
-from Encoder3.Encoder_RL_layer import Encoder_RL_Layer
+from Encoder4.Encoder_Predictor import Encoder_Predictor
+from Encoder4.Encoder_Processor import Encoder_Processor
+from Encoder4.Encoder_RL_layer import Encoder_RL_Layer
 from train_utils import run_training2, copy_weights_encoder_to_predictor_wordbased, run_training_encoder_only, run_training_RL_only
 
 CASES_FILENAME = "cases.txt"
 QUOTES = ["'", '“', '"']
 GLOVE_FILE = "glove.6B.200d.txt"
-
 
 def get_data(settings):
     with open(utils.SPLITTED_SENTENCES_FILENAME, "rt", encoding="utf8") as f:
@@ -86,7 +85,7 @@ def init_settings():
     settings['word_embedding_size'] = 32
     settings['sentence_embedding_size'] = 64
     settings['inner_dim'] = 64
-    settings['depth'] = 6
+    settings['depth'] = 5
     settings['action_dim'] = 64
     settings['dropout_W'] = 0.0
     settings['dropout_U'] = 0.0
@@ -133,7 +132,7 @@ def prepare_objects(data, settings):
 
 def build_encoder(data, settings):
     sys.stdout.write('Building model\n')
-    data_input = Input(shape=(settings['max_len'],))
+    data_input = Input(shape=(settings['max_len'],), dtype="int32")
     bucket_size_input = Input(shape=(1,),dtype="int32")
     if 'emb_matrix' in data:
         embedding = Embedding(input_dim=settings['max_features']+2,
@@ -162,7 +161,7 @@ def build_encoder(data, settings):
                                 dropout_action=settings['dropout_action'],
                                 l2=settings['l2'],
                                 name='encoder')([embedding, bucket_size_input])
-    layer = encoder[0]
+    layer = encoder
 
     for idx, hidden_dim in enumerate(settings['hidden_dims']):
         layer = Dropout(settings['dense_dropout'])(layer)
@@ -170,15 +169,15 @@ def build_encoder(data, settings):
         layer = Activation('tanh')(layer)
     layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(inputs=[data_input, bucket_size_input], outputs=[output, encoder[1]])
+    model = Model(inputs=[data_input, bucket_size_input], outputs=[output])
     optimizer = Adam()
 
-    model.compile(loss={"output": "categorical_crossentropy", "encoder": None}, optimizer=optimizer, metrics={"output":'accuracy'})
+    model.compile(loss={"output": "categorical_crossentropy"}, optimizer=optimizer, metrics={"output":'accuracy'})
     return model
 
 def build_predictor(data, settings):
     sys.stdout.write('Building model\n')
-    data_input = Input(shape=(settings['max_len'],))
+    data_input = Input(shape=(settings['max_len'],), dtype="int32")
     bucket_size_input = Input(shape=(1,),dtype="int32")
     if 'emb_matrix' in data:
         embedding = Embedding(input_dim=settings['max_features']+2,
@@ -239,7 +238,7 @@ def build_RL_model(settings):
 def build_generator_HRNN(data, settings, indexes):
     def generator():
         walk_order = list(indexes)
-        np.random.shuffle(walk_order)
+        #np.random.shuffle(walk_order)
         buckets = {}
         while True:
             idx = walk_order.pop()-1
@@ -248,7 +247,7 @@ def build_generator_HRNN(data, settings, indexes):
             label = row['label']
             if len(walk_order) == 0:
                 walk_order = list(indexes)
-                np.random.shuffle(walk_order)
+                #np.random.shuffle(walk_order)
             if len(sentence) > settings['max_len']:
                 continue
             bucket_size = ceil((len(sentence)+1.0) / settings['bucket_size_step'])*settings['bucket_size_step']
@@ -269,7 +268,7 @@ def build_generator_HRNN(data, settings, indexes):
     return generator()
 
 def build_batch(data, settings, sentence_batch):
-    X = np.zeros((settings['batch_size'], settings['max_len']))
+    X = np.zeros((settings['batch_size'], settings['max_len']), dtype="int32")
     Y = np.zeros((settings['batch_size'], settings['num_of_classes']), dtype=np.bool)
     for i, sentence_tuple in enumerate(sentence_batch):
         for idx, word in enumerate(sentence_tuple[0]):
@@ -295,6 +294,7 @@ def train(filename):
     #objects['encoder'].load_weights("encoder.h5")
     #objects['predictor'].load_weights("predictor.h5")
     #objects['rl_model'].load_weights("rl_model.h5")
+
     #load(objects, filename)
     sys.stdout.write('Compiling model\n')
     run_training2(data, objects, settings)

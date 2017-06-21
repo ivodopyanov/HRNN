@@ -84,13 +84,23 @@ def run_training2(data, objects, settings):
         acc_total = []
         loss2_total = []
         depth_total = []
+        lla_total = []
+        #objects['encoder'].save_weights("encoder.h5")
+        #objects['predictor'].save_weights("predictor.h5")
+        #objects['rl_model'].save_weights("rl_model.h5")
         for j in range(epoch_size):
+
+            '''if j == 605:
+                objects['encoder'].save_weights("encoder.h5")
+                objects['predictor'].save_weights("predictor.h5")
+                objects['rl_model'].save_weights("rl_model.h5")
+                return'''
             batch = next(objects['data_gen'])
             loss1 = encoder.train_on_batch(batch[0], batch[1])
-            if isnan(loss1[0]) or isnan(loss1[2]):
+            if isnan(loss1[0]):
                 continue
             loss1_total.append(loss1[0])
-            acc_total.append(loss1[2])
+            acc_total.append(loss1[1])
 
             if len(loss1_total) == 0:
                 avg_loss1 = 0
@@ -121,11 +131,12 @@ def run_training2(data, objects, settings):
                 error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
                 #error = -np.log(np.sum(output*batch[1], axis=1))
                 X,Y,sample_weight = restore_exp3(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
-                if Y.shape[0] > 1:
-                    loss2 = rl_model.train_on_batch(X,Y)
-                    loss2_total.append(loss2)
-                    copy_weights_rl_to_predictor(objects)
-                    copy_weights_rl_to_encoder(objects)
+                loss2 = rl_model.train_on_batch(X,Y)
+                if isnan(loss2):
+                    continue
+                loss2_total.append(loss2)
+                copy_weights_rl_to_predictor(objects)
+                copy_weights_rl_to_encoder(objects)
 
 
             if len(loss2_total) == 0:
@@ -136,6 +147,7 @@ def run_training2(data, objects, settings):
                 avg_depth = 0
             else:
                 avg_depth = np.sum(depth_total)*1.0/len(depth_total)
+
 
             sys.stdout.write("\r batch {} / {}: loss1 = {:.4f}, acc = {:.4f}, loss2 = {:.4f}, depth = {:.4f}"
                          .format(j+1, epoch_size,
@@ -170,11 +182,12 @@ def run_training2(data, objects, settings):
                 error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
                 #error = -np.log(np.sum(output*batch[1], axis=1))
                 X,Y,sample_weight = restore_exp3(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
-                if Y.shape[0] > 1:
-                    loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
-                    loss2_total.append(loss2)
+                loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
+                if isnan(loss2):
+                    continue
+                loss2_total.append(loss2)
             loss1_total.append(loss1[0])
-            acc_total.append(loss1[2])
+            acc_total.append(loss1[1])
             depth_total.append(depth[0])
 
             if len(loss1_total) == 0:

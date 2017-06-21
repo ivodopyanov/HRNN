@@ -7,7 +7,7 @@ from keras.engine import Layer
 import theano as T
 import theano.tensor as TS
 from theano.printing import Print
-from Encoder3.Encoder_Base import Encoder_Base
+from Encoder4.Encoder_Base import Encoder_Base
 
 
 class Encoder_Predictor(Encoder_Base):
@@ -98,12 +98,11 @@ class Encoder_Predictor(Encoder_Base):
         x = h[-1]
 
         data_mask = data_mask[-1]
-        data_mask = data_mask*has_value
 
 
         initial_final_has_value = K.zeros((self.batch_size), dtype="bool")
         results, _ = T.scan(self.final_step,
-                            sequences=[x, data_mask],
+                            sequences=[x, data_mask, has_value],
                             outputs_info=[initial_h, initial_final_has_value])
 
         h = results[0]
@@ -183,8 +182,9 @@ class Encoder_Predictor(Encoder_Base):
 
         policy_used = has_value_tm1*prev_mask*prev_has_value
 
-        policy = activations.tanh(K.dot(x*B_W, self.W_action_1) + K.dot(h_tm1*B_U, self.U_action_1) + self.b_action_1)
-        policy = K.exp(K.minimum(K.dot(policy*B_action, self.W_action_3)+self.b_action_3,5))
+        policy = activations.relu(K.dot(x*B_W, self.W_action_1) + K.dot(h_tm1*B_U, self.U_action_1) + self.b_action_1)
+        policy = K.exp(K.minimum(K.dot(policy*B_action, self.W_action_3)+self.b_action_3, 5))
+
 
         # 1 = reduce, 0 = continue acc
         new_mask = K.switch(TS.le(policy[:,0], policy[:, 1]), 1, 0)
@@ -226,8 +226,8 @@ class Encoder_Predictor(Encoder_Base):
         h_only_for_h = h_only.dimshuffle([0,'x'])
         h_only_for_h = TS.extra_ops.repeat(h_only_for_h, self.hidden_dim, axis=1)
 
-        h_ = activations.tanh(K.dot(x*B_W, self.W) + K.dot(h_tm1*B_U, self.U) + self.b)
-        h_ = activations.tanh(K.dot(h_*B_W1, self.W1) + self.b1)
+        h_ = self.gru_step(x, h_tm1,B_W,B_U,B_W1,self.W, self.U, self.b, self.W1, self.b1, self.inner_dim)
+
         h = both_for_h*h_ + x_only_for_h*x + h_only_for_h * h_tm1
 
         policy_depth = K.maximum(prev_policy_depth, policy_depth_tm1)
