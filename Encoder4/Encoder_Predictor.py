@@ -11,8 +11,7 @@ from Encoder4.Encoder_Base import Encoder_Base
 
 
 class Encoder_Predictor(Encoder_Base):
-    def __init__(self, random_action_prob, **kwargs):
-        self.random_action_prob = random_action_prob
+    def __init__(self, **kwargs):
         self.uses_learning_phase = True
         super(Encoder_Predictor, self).__init__(**kwargs)
 
@@ -35,6 +34,7 @@ class Encoder_Predictor(Encoder_Base):
 
         # Keras doesn't allow 1D model inputs - so that tensor have shape (1,1) instead of scalar or (1,)
         bucket_size = input[1][0][0]
+        random_action_prob = input[2][0][0]
 
 
         data_mask = mask[0]
@@ -69,6 +69,7 @@ class Encoder_Predictor(Encoder_Base):
 
         results, _ = T.scan(self.vertical_step,
                         outputs_info=[x, data_mask, data_mask, initial_policy_input_x, initial_policy_input_h, initial_policy, initial_policy_used, initial_policy_depth, initial_depth],
+                        non_sequences=[random_action_prob],
                         n_steps=self.depth-1)
 
         chosen_action = results[1]
@@ -118,7 +119,7 @@ class Encoder_Predictor(Encoder_Base):
                 policy_depth.dimshuffle([2,0,1]),
                 depth]
 
-    def vertical_step(self, x, x_mask, prev_has_value, policy_input_x_tm1, policy_input_h_tm1, policy_tm1, policy_used_tm1, prev_policy_depth, prev_depth):
+    def vertical_step(self, x, x_mask, prev_has_value, policy_input_x_tm1, policy_input_h_tm1, policy_tm1, policy_used_tm1, prev_policy_depth, prev_depth, random_action_prob):
 
         initial_h = K.zeros((self.batch_size, self.hidden_dim), name="initial_h")
         initial_new_mask = K.ones((self.batch_size), dtype="bool", name="initial_new_mask")
@@ -132,7 +133,8 @@ class Encoder_Predictor(Encoder_Base):
 
         results, _ = T.scan(self.horizontal_step,
                             sequences=[x, x_mask, prev_has_value, prev_policy_depth],
-                            outputs_info=[initial_h, initial_new_mask, initial_has_value, initial_both, initial_policy_input_x, initial_policy_input_h, initial_policy, initial_policy_used, initial_policy_depth])
+                            outputs_info=[initial_h, initial_new_mask, initial_has_value, initial_both, initial_policy_input_x, initial_policy_input_h, initial_policy, initial_policy_used, initial_policy_depth],
+                            non_sequences=[random_action_prob])
         new_h = results[0]
         new_mask = results[1]
         has_value = results[2]
@@ -157,7 +159,7 @@ class Encoder_Predictor(Encoder_Base):
 
         return [new_h, new_mask, has_value, policy_input_x, policy_input_h, policy, policy_used, policy_depth, depth], T.scan_module.until(TS.eq(TS.sum(both), 0))
 
-    def horizontal_step(self, x, prev_mask, prev_has_value, prev_policy_depth, h_tm1, mask_tm1, has_value_tm1, both_tm1, policy_input_x_tm1, policy_input_h_tm1, policy_tm1, policy_used_tm1, policy_depth_tm1):
+    def horizontal_step(self, x, prev_mask, prev_has_value, prev_policy_depth, h_tm1, mask_tm1, has_value_tm1, both_tm1, policy_input_x_tm1, policy_input_h_tm1, policy_tm1, policy_used_tm1, policy_depth_tm1, random_action_prob):
 
         if 0 < self.dropout_u < 1:
             ones = K.ones((self.inner_dim))
@@ -188,7 +190,7 @@ class Encoder_Predictor(Encoder_Base):
 
         # 1 = reduce, 0 = continue acc
         new_mask = K.switch(TS.le(policy[:,0], policy[:, 1]), 1, 0)
-        use_random_action = K.random_binomial((self.batch_size,), self.random_action_prob)
+        use_random_action = K.random_binomial((self.batch_size,), random_action_prob)
         use_random_action = K.in_train_phase(use_random_action, K.zeros((self.batch_size)))
         random_action = K.random_uniform((self.batch_size,)) >= 0.5
         new_mask = K.switch(use_random_action, random_action, new_mask)

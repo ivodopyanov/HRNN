@@ -85,21 +85,23 @@ def init_settings():
     settings['word_embedding_size'] = 32
     settings['sentence_embedding_size'] = 64
     settings['inner_dim'] = 64
-    settings['depth'] = 5
+    settings['depth'] = 10
     settings['action_dim'] = 64
-    settings['dropout_W'] = 0.0
+    settings['dropout_W'] = 0.2
     settings['dropout_U'] = 0.0
-    settings['dropout_action'] = 0.0
+    settings['dropout_action'] = 0.5
     settings['dropout_emb'] = 0.0
     settings['hidden_dims'] = [64]
-    settings['dense_dropout'] = 0.0
+    settings['dense_dropout'] = 0.5
     settings['bucket_size_step'] = 4
     settings['batch_size'] = 32
     settings['max_len'] = 128
-    settings['max_features']=10000
+    settings['max_features']=30000
     settings['with_sentences']=False
     settings['epochs'] = 200
-    settings['random_action_prob'] = 0.0
+    settings['random_action_prob_max'] = 0.5
+    settings['random_action_prob_min'] = 0.1
+    settings['random_action_prob_decay'] = 0.9
     settings['copy_etp'] = copy_weights_encoder_to_predictor_wordbased
     settings['with_embedding'] = False
     settings['l2'] = 0.00001
@@ -179,6 +181,7 @@ def build_predictor(data, settings):
     sys.stdout.write('Building model\n')
     data_input = Input(shape=(settings['max_len'],), dtype="int32")
     bucket_size_input = Input(shape=(1,),dtype="int32")
+    random_action_prob = Input(shape=(1,), dtype="int32")
     if 'emb_matrix' in data:
         embedding = Embedding(input_dim=settings['max_features']+2,
                           output_dim=settings['word_embedding_size'],
@@ -200,12 +203,11 @@ def build_predictor(data, settings):
                                 action_dim=settings['action_dim'],
                                 batch_size=settings['batch_size'],
                                 max_len=settings['max_len'],
-                                random_action_prob=settings['random_action_prob'],
                                 dropout_u=settings['dropout_U'],
                                 dropout_w=settings['dropout_W'],
                                 dropout_action=settings['dropout_action'],
                                 l2=settings['l2'],
-                                name='encoder')([embedding, bucket_size_input])
+                                name='encoder')([embedding, bucket_size_input, random_action_prob])
     layer = encoder[0]
 
     for idx, hidden_dim in enumerate(settings['hidden_dims']):
@@ -214,7 +216,7 @@ def build_predictor(data, settings):
         layer = Activation('tanh')(layer)
     layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(inputs=[data_input, bucket_size_input],
+    model = Model(inputs=[data_input, bucket_size_input, random_action_prob],
                   outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6], encoder[7]])
     return model
 

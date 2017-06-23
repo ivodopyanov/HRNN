@@ -30,7 +30,7 @@ def prepare():
         words = row['desc'].split(u" ")
         for word in words:
             word_count[word] += 1
-        label_file.write(u"{} {} {}\n".format(row['service'], row['sevicecomp'], row['route']))
+        label_file.write(u"{}\n".format(row['service']))
         sentences_file.write(row['desc']+" "+utils.EOS_WORD+u"\n")
         splitted_sentences_file.write(row['desc']+" "+utils.EOS_WORD+u"\n")
 

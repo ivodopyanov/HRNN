@@ -78,7 +78,14 @@ def run_training2(data, objects, settings):
 
     sys.stdout.write("\nTrain epoch size = {}; val epoch size = {}".format(epoch_size, val_epoch_size))
 
+    random_action_prob = settings['random_action_prob_max']
+
     for epoch in range(settings['epochs']):
+
+        if epoch > 0:
+            random_action_prob *= settings['random_action_prob_decay']
+            if random_action_prob < settings['random_action_prob_min']:
+                random_action_prob = settings['random_action_prob_min']
         sys.stdout.write("\n\nEpoch {}\n".format(epoch+1))
         loss1_total = []
         acc_total = []
@@ -96,6 +103,7 @@ def run_training2(data, objects, settings):
                 objects['rl_model'].save_weights("rl_model.h5")
                 return'''
             batch = next(objects['data_gen'])
+
             loss1 = encoder.train_on_batch(batch[0], batch[1])
             if isnan(loss1[0]):
                 continue
@@ -113,7 +121,11 @@ def run_training2(data, objects, settings):
 
             settings['copy_etp'](objects)
 
-            ins = batch[0] + [1.]
+            ins = batch[0]
+            random_action_prob_input = np.zeros((settings['batch_size'],1), dtype=int)
+            random_action_prob_input[0][0]=random_action_prob
+            ins.append(random_action_prob_input)
+            ins = ins + [1.]
             y_pred = predictor.predict_function(ins)
 
             output = y_pred[0]
@@ -131,7 +143,7 @@ def run_training2(data, objects, settings):
                 error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
                 #error = -np.log(np.sum(output*batch[1], axis=1))
                 X,Y,sample_weight = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
-                loss2 = rl_model.train_on_batch(X,Y,sample_weight=sample_weight)
+                loss2 = rl_model.train_on_batch(X,Y)
                 if isnan(loss2):
                     continue
                 loss2_total.append(loss2)
@@ -163,6 +175,8 @@ def run_training2(data, objects, settings):
             batch = next(objects['val_gen'])
             try:
                 loss1 = encoder.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
+                random_action_prob_input = np.zeros((settings['batch_size'],1), dtype=int)
+                batch[0].append(random_action_prob_input)
                 y_pred = predictor.predict_on_batch(batch[0])
             except ValueError:
                 sys.stdout.write("ValueError3!\n")
@@ -182,7 +196,7 @@ def run_training2(data, objects, settings):
                 error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
                 #error = -np.log(np.sum(output*batch[1], axis=1))
                 X,Y,sample_weight = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
-                loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0,sample_weight=sample_weight)
+                loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
                 if isnan(loss2):
                     continue
                 loss2_total.append(loss2)
@@ -273,13 +287,22 @@ def run_training_RL_only(data, objects, settings):
     epoch_size = int(len(objects['train_indexes'])/(settings['epoch_mult']*settings['batch_size']))
     val_epoch_size = int(len(objects['val_indexes'])/(1*settings['batch_size']))
     sys.stdout.write("\nTrain epoch size = {}; val epoch size = {}".format(epoch_size, val_epoch_size))
+    random_action_prob = settings['random_action_prob_max']
     for epoch in range(settings['epochs']):
+        if epoch > 0:
+            random_action_prob *= settings['random_action_prob_decay']
+            if random_action_prob < settings['random_action_prob_min']:
+                random_action_prob = settings['random_action_prob_min']
         sys.stdout.write("\n\nEpoch {}\n".format(epoch+1))
         loss2_total = []
         depth_total = []
         for j in range(epoch_size):
             batch = next(objects['data_gen'])
-            ins = batch[0] + [1.]
+            ins = batch[0]
+            random_action_prob_input = np.zeros((settings['batch_size'],1), dtype=int)
+            random_action_prob_input[0][0]=random_action_prob
+            ins.append(random_action_prob_input)
+            ins = batch + [1.]
             y_pred = predictor.predict_function(ins)
             output = y_pred[0]
             input_x = y_pred[1]
@@ -294,7 +317,7 @@ def run_training_RL_only(data, objects, settings):
                 error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
                 #error = -np.log(np.sum(output*batch[1], axis=1))
                 X,Y,sample_weight = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
-                loss2 = rl_model.train_on_batch(X,Y,sample_weight=sample_weight)
+                loss2 = rl_model.train_on_batch(X,Y)
                 loss2_total.append(loss2)
                 copy_weights_rl_to_predictor(objects)
                 copy_weights_rl_to_encoder(objects)
@@ -332,7 +355,7 @@ def run_training_RL_only(data, objects, settings):
                 #error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
                 error = -np.log(np.sum(output*batch[1], axis=1))
                 X,Y,sample_weight = restore_exp(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
-                loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0,sample_weight=sample_weight)
+                loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
                 loss2_total.append(loss2)
             depth_total.append(depth[0])
             loss1_total.append(loss1[0])
