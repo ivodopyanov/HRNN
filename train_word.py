@@ -99,7 +99,7 @@ def init_settings():
     settings['max_features']=30000
     settings['with_sentences']=False
     settings['epochs'] = 200
-    settings['random_action_prob_max'] = 0.5
+    settings['random_action_prob_max'] = 0.0
     settings['random_action_prob_min'] = 0.1
     settings['random_action_prob_decay'] = 0.9
     settings['copy_etp'] = copy_weights_encoder_to_predictor_wordbased
@@ -172,7 +172,7 @@ def build_encoder(data, settings):
     layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
     model = Model(inputs=[data_input, bucket_size_input], outputs=[output])
-    optimizer = Adam()
+    optimizer = Adam(clipvalue=5)
 
     model.compile(loss={"output": "categorical_crossentropy"}, optimizer=optimizer, metrics={"output":'accuracy'})
     return model
@@ -232,7 +232,7 @@ def build_RL_model(settings):
                              l2=settings['l2'],
                              name='encoder')([x_input, h_tm1_input])
     model = Model(inputs=[x_input, h_tm1_input], outputs=[layer])
-    optimizer = Adam()
+    optimizer = Adam(clipvalue=5)
     model.compile(loss='mse', optimizer=optimizer)
     return model
 
@@ -293,9 +293,9 @@ def train(filename):
     settings['with_sentences']=True
     data, settings = get_data(settings)
     objects = prepare_objects(data, settings)
-    #objects['encoder'].load_weights("encoder.h5")
-    #objects['predictor'].load_weights("predictor.h5")
-    #objects['rl_model'].load_weights("rl_model.h5")
+    objects['encoder'].load_weights("encoder3.h5")
+    objects['predictor'].load_weights("predictor3.h5")
+    objects['rl_model'].load_weights("rl_model3.h5")
 
     #load(objects, filename)
     sys.stdout.write('Compiling model\n')
