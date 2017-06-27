@@ -12,9 +12,9 @@ import keras.backend as K
 from theano.printing import Print
 
 import utils
-from Encoder4.Encoder_Predictor import Encoder_Predictor
-from Encoder4.Encoder_Processor import Encoder_Processor
-from Encoder4.Encoder_RL_layer import Encoder_RL_Layer
+from Encoder3.Encoder_Predictor import Encoder_Predictor
+from Encoder3.Encoder_Processor import Encoder_Processor
+from Encoder3.Encoder_RL_layer import Encoder_RL_Layer
 from train_utils import run_training2, copy_weights_encoder_to_predictor_wordbased, run_training_encoder_only, run_training_RL_only
 
 CASES_FILENAME = "cases.txt"
@@ -83,24 +83,25 @@ def update_corpus_with_glove(settings, data):
 def init_settings():
     settings = {}
     settings['word_embedding_size'] = 32
-    settings['sentence_embedding_size'] = 64
-    settings['inner_dim'] = 64
+    settings['sentence_embedding_size'] = 32
+    settings['inner_dim'] = 32
     settings['depth'] = 10
-    settings['action_dim'] = 64
+    settings['action_dim'] = 32
     settings['dropout_W'] = 0.2
     settings['dropout_U'] = 0.0
     settings['dropout_action'] = 0.5
     settings['dropout_emb'] = 0.0
-    settings['hidden_dims'] = [64]
+    settings['hidden_dims'] = [32]
     settings['dense_dropout'] = 0.5
     settings['bucket_size_step'] = 4
     settings['batch_size'] = 32
     settings['max_len'] = 128
+    settings['current_max_len']=8
     settings['max_features']=30000
     settings['with_sentences']=False
     settings['epochs'] = 200
     settings['random_action_prob_max'] = 0.0
-    settings['random_action_prob_min'] = 0.1
+    settings['random_action_prob_min'] = 0.0
     settings['random_action_prob_decay'] = 0.9
     settings['copy_etp'] = copy_weights_encoder_to_predictor_wordbased
     settings['with_embedding'] = False
@@ -157,7 +158,6 @@ def build_encoder(data, settings):
                                 depth=settings['depth'],
                                 action_dim=settings['action_dim'],
                                 batch_size = settings['batch_size'],
-                                max_len=settings['max_len'],
                                 dropout_u=settings['dropout_U'],
                                 dropout_w=settings['dropout_W'],
                                 dropout_action=settings['dropout_action'],
@@ -202,7 +202,6 @@ def build_predictor(data, settings):
                                 depth=settings['depth'],
                                 action_dim=settings['action_dim'],
                                 batch_size=settings['batch_size'],
-                                max_len=settings['max_len'],
                                 dropout_u=settings['dropout_U'],
                                 dropout_w=settings['dropout_W'],
                                 dropout_action=settings['dropout_action'],
@@ -250,7 +249,7 @@ def build_generator_HRNN(data, settings, indexes):
             if len(walk_order) == 0:
                 walk_order = list(indexes)
                 #np.random.shuffle(walk_order)
-            if len(sentence) > settings['max_len']:
+            if len(sentence) > settings['current_max_len']:
                 continue
             bucket_size = ceil((len(sentence)+1.0) / settings['bucket_size_step'])*settings['bucket_size_step']
             if bucket_size not in buckets:
@@ -293,9 +292,10 @@ def train(filename):
     settings['with_sentences']=True
     data, settings = get_data(settings)
     objects = prepare_objects(data, settings)
-    objects['encoder'].load_weights("encoder3.h5")
-    objects['predictor'].load_weights("predictor3.h5")
-    objects['rl_model'].load_weights("rl_model3.h5")
+    settings['current_max_len']=16
+    #objects['encoder'].load_weights("encoder3.h5")
+    #objects['predictor'].load_weights("predictor3.h5")
+    #objects['rl_model'].load_weights("rl_model3.h5")
 
     #load(objects, filename)
     sys.stdout.write('Compiling model\n')

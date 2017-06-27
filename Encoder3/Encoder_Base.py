@@ -11,7 +11,7 @@ from theano.printing import Print
 
 
 class Encoder_Base(Layer):
-    def __init__(self, input_dim, inner_dim, hidden_dim, action_dim, depth, batch_size, max_len,
+    def __init__(self, input_dim, inner_dim, hidden_dim, action_dim, depth, batch_size,
                  dropout_w, dropout_u, dropout_action, l2, **kwargs):
         '''
         Layer also uses
@@ -30,7 +30,6 @@ class Encoder_Base(Layer):
         self.action_dim = action_dim
         self.depth = depth
         self.batch_size = batch_size
-        self.max_len = max_len
         self.dropout_w = dropout_w
         self.dropout_u = dropout_u
         self.dropout_action = dropout_action
