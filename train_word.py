@@ -100,7 +100,7 @@ def init_settings():
     settings['max_features']=30000
     settings['with_sentences']=False
     settings['epochs'] = 200
-    settings['random_action_prob_max'] = 0.0
+    settings['random_action_prob_max'] = 0.9
     settings['random_action_prob_min'] = 0.0
     settings['random_action_prob_decay'] = 0.9
     settings['copy_etp'] = copy_weights_encoder_to_predictor_wordbased
@@ -181,7 +181,7 @@ def build_predictor(data, settings):
     sys.stdout.write('Building model\n')
     data_input = Input(shape=(settings['max_len'],), dtype="int32")
     bucket_size_input = Input(shape=(1,),dtype="int32")
-    random_action_prob = Input(shape=(1,), dtype="int32")
+    random_action_prob = Input(shape=(1,), dtype="float32")
     if 'emb_matrix' in data:
         embedding = Embedding(input_dim=settings['max_features']+2,
                           output_dim=settings['word_embedding_size'],

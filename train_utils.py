@@ -122,7 +122,7 @@ def run_training2(data, objects, settings):
             settings['copy_etp'](objects)
 
             ins = batch[0]
-            random_action_prob_input = np.zeros((settings['batch_size'],1), dtype=int)
+            random_action_prob_input = np.zeros((settings['batch_size'],1), dtype="float32")
             random_action_prob_input[0][0]=random_action_prob
             ins.append(random_action_prob_input)
             ins = ins + [1.]
@@ -175,7 +175,7 @@ def run_training2(data, objects, settings):
             batch = next(objects['val_gen'])
             try:
                 loss1 = encoder.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
-                random_action_prob_input = np.zeros((settings['batch_size'],1), dtype=int)
+                random_action_prob_input = np.zeros((settings['batch_size'],1), dtype="float32")
                 batch[0].append(random_action_prob_input)
                 y_pred = predictor.predict_on_batch(batch[0])
             except ValueError:
@@ -299,7 +299,7 @@ def run_training_RL_only(data, objects, settings):
         for j in range(epoch_size):
             batch = next(objects['data_gen'])
             ins = batch[0]
-            random_action_prob_input = np.zeros((settings['batch_size'],1), dtype=int)
+            random_action_prob_input = np.zeros((settings['batch_size'],1), dtype="float32")
             random_action_prob_input[0][0]=random_action_prob
             ins.append(random_action_prob_input)
             ins = ins + [1.]
@@ -343,7 +343,7 @@ def run_training_RL_only(data, objects, settings):
             batch = next(objects['val_gen'])
             loss1 = encoder.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
             ins = batch[0]
-            random_action_prob_input = np.zeros((settings['batch_size'],1), dtype=int)
+            random_action_prob_input = np.zeros((settings['batch_size'],1), dtype="float32")
             random_action_prob_input[0][0]=random_action_prob
             ins.append(random_action_prob_input)
             y_pred = predictor.predict_on_batch(ins)
