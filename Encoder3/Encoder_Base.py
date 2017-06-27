@@ -124,8 +124,8 @@ class Encoder_Base(Layer):
         #has_value_tm1 = Print("has_value_tm1")(has_value_tm1)
         #x_mask = Print("x_mask")(x_mask)
         #prev_has_value = Print("prev_has_value")(prev_has_value)
-        h_ = activations.tanh(K.dot(x*B_W, self.W) + K.dot(h_tm1*B_U, self.U) + self.b)
-        h_ = activations.tanh(K.dot(h_*B_W1, self.W1) + self.b1)
+        h_ = activations.relu(K.dot(x*B_W, self.W) + K.dot(h_tm1*B_U, self.U) + self.b)
+        h_ = activations.relu(K.dot(h_*B_W1, self.W1) + self.b1)
 
         has_value_tm1_for_h = K.expand_dims(has_value_tm1)
         has_value_tm1_for_h = K.repeat_elements(has_value_tm1_for_h, self.hidden_dim, 1)
