@@ -10,7 +10,7 @@ from keras.models import Model
 from keras.optimizers import Adam
 
 import utils
-from Encoder4.Encoder_Processor import Encoder_Processor
+from Encoder6.Encoder import Seq2Seq_Encoder
 from train_utils import run_training2, copy_weights_encoder_to_predictor_wordbased, run_training_encoder_only, run_training_RL_only
 
 CASES_FILENAME = "cases.txt"
@@ -81,14 +81,14 @@ def update_corpus_with_glove(settings, data):
 def init_settings():
     settings = {}
     settings['word_embedding_size'] = 32
-    settings['sentence_embedding_size'] = 64
+    settings['sentence_embedding_size'] = 32
     settings['depth'] = 6
     settings['action_dim'] = 64
     settings['dropout_W'] = 0.0
     settings['dropout_U'] = 0.0
     settings['dropout_action'] = 0.0
     settings['dropout_emb'] = 0.0
-    settings['hidden_dims'] = [64]
+    settings['hidden_dims'] = [128]
     settings['dense_dropout'] = 0.0
     settings['bucket_size_step'] = 4
     settings['batch_size'] = 4
@@ -101,6 +101,8 @@ def init_settings():
     settings['with_embedding'] = False
     settings['l2'] = 0.00001
     settings['epoch_mult'] = 10
+    settings['kernel_size'] = 4
+    settings['filters'] = 128
     return settings
 
 def prepare_objects(data, settings):
@@ -124,35 +126,19 @@ def prepare_objects(data, settings):
 
 def build_encoder(data, settings):
     sys.stdout.write('Building model\n')
-    data_input = Input(shape=(settings['max_len'],))
+    data_input = Input(shape=(settings['max_len'],), dtype="int64")
     bucket_size_input = Input(shape=(1,),dtype="int32")
-    if 'emb_matrix' in data:
-        embedding = Embedding(input_dim=settings['max_features']+2,
-                          output_dim=settings['word_embedding_size'],
-                          name='emb',
-                          mask_zero=True,
-                          weights=[data['emb_matrix']],
-                          trainable=False)(data_input)
-    else:
-        embedding = Embedding(input_dim=settings['max_features']+2,
-                          output_dim=settings['word_embedding_size'],
-                          name='emb',
-                          mask_zero=True)(data_input)
-    if settings['dropout_emb'] > 0:
-        embedding = SpatialDropout1D(settings['dropout_emb'])(embedding)
 
-    encoder = Encoder_Processor(input_dim=settings['word_embedding_size'],
-                                hidden_dim=settings['sentence_embedding_size'],
-                                depth=settings['depth'],
-                                action_dim=settings['action_dim'],
-                                batch_size = settings['batch_size'],
-                                max_len=settings['max_len'],
-                                dropout_u=settings['dropout_U'],
-                                dropout_w=settings['dropout_W'],
-                                dropout_action=settings['dropout_action'],
-                                l2=settings['l2'],
-                                name='encoder')([embedding, bucket_size_input])
-    layer = encoder[0]
+    encoder = Seq2Seq_Encoder(word_count=settings['max_features']+2,
+                              units=settings['sentence_embedding_size'],
+                              batch_size = settings['batch_size'],
+                              dropout_u=settings['dropout_U'],
+                              dropout_w=settings['dropout_W'],
+                              l2=settings['l2'],
+                              kernel_size = settings['kernel_size'],
+                              filters = settings['filters'],
+                              name='encoder')([data_input, bucket_size_input])
+    layer = encoder
 
     for idx, hidden_dim in enumerate(settings['hidden_dims']):
         layer = Dropout(settings['dense_dropout'])(layer)
@@ -160,10 +146,10 @@ def build_encoder(data, settings):
         layer = Activation('tanh')(layer)
     layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
-    model = Model(inputs=[data_input, bucket_size_input], outputs=[output, encoder[1]])
+    model = Model(inputs=[data_input, bucket_size_input], outputs=[output])
     optimizer = Adam()
 
-    model.compile(loss={"output": "categorical_crossentropy", "encoder": None}, optimizer=optimizer, metrics={"output":'accuracy'})
+    model.compile(loss={"output": "categorical_crossentropy"}, optimizer=optimizer, metrics={"output":'accuracy'})
     return model
 
 
@@ -200,7 +186,7 @@ def build_generator_HRNN(data, settings, indexes):
     return generator()
 
 def build_batch(data, settings, sentence_batch):
-    X = np.zeros((settings['batch_size'], settings['max_len']))
+    X = np.zeros((settings['batch_size'], settings['max_len']), dtype="int64")
     Y = np.zeros((settings['batch_size'], settings['num_of_classes']), dtype=np.bool)
     for i, sentence_tuple in enumerate(sentence_batch):
         for idx, word in enumerate(sentence_tuple[0]):
@@ -226,7 +212,7 @@ def run_training_simple(data, objects, settings):
             batch = next(objects['data_gen'])
             loss1 = model.train_on_batch(batch[0], batch[1])
             loss_total.append(loss1[0])
-            acc_total.append(loss1[2])
+            acc_total.append(loss1[1])
 
             if len(loss_total) == 0:
                 avg_loss = 0
@@ -249,7 +235,7 @@ def run_training_simple(data, objects, settings):
             loss = model.evaluate(batch[0], batch[1], batch_size=settings['batch_size'], verbose=0)
 
             loss_total.append(loss[0])
-            acc_total.append(loss[2])
+            acc_total.append(loss[1])
             sys.stdout.write("\r Testing batch {} / {}: loss1 = {:.4f}, acc = {:.4f}"
                              .format(i+1, val_epoch_size,
                                      np.sum(loss_total)*1.0/len(loss_total),

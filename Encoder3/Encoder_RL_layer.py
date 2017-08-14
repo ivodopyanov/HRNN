@@ -31,6 +31,11 @@ class Encoder_RL_Layer(Layer):
                                           regularizer=l2(self.l2),
                                           initializer=orthogonal(),
                                           name='U_action_1_{}'.format(self.name))
+        self.V_action_1 = self.add_weight(shape=(self.hidden_dim, self.action_dim),
+                                          regularizer=l2(self.l2),
+                                          initializer=glorot_uniform(),
+                                          trainable=False,
+                                          name='V_action_1_{}'.format(self.name))
         self.b_action_1 = self.add_weight(shape=(self.action_dim,),
                                           initializer=zeros(),
                                           name='b_action_2_{}'.format(self.name))
@@ -53,13 +58,19 @@ class Encoder_RL_Layer(Layer):
 
     def call(self, input, mask=None):
         x = input[0]
-        h_tm1 = input[1]
+        next_x = input[1]
+        h_tm1 = input[2]
 
         if 0 < self.dropout_u < 1:
             ones = K.ones((self.hidden_dim))
             B_U = K.in_train_phase(K.dropout(ones, self.dropout_u), ones)
         else:
             B_U = K.cast_to_floatx(1.)
+        if 0 < self.dropout_w < 1:
+            ones = K.ones((self.hidden_dim))
+            B_V = K.in_train_phase(K.dropout(ones, self.dropout_w), ones)
+        else:
+            B_V = K.cast_to_floatx(1.)
         if 0 < self.dropout_w < 1:
             ones = K.ones((self.hidden_dim))
             B_W = K.in_train_phase(K.dropout(ones, self.dropout_w), ones)
@@ -71,7 +82,7 @@ class Encoder_RL_Layer(Layer):
         else:
             B_action = K.cast_to_floatx(1.)
 
-        policy = activations.relu(K.dot(x*B_W, self.W_action_1) + K.dot(h_tm1*B_U, self.U_action_1) + self.b_action_1)
+        policy = activations.relu(K.dot(x*B_W, self.W_action_1) + K.dot(next_x*B_V, self.V_action_1) + K.dot(h_tm1*B_U, self.U_action_1) + self.b_action_1, 0.01)
         policy = K.exp(K.minimum(K.dot(policy*B_action, self.W_action_3)+self.b_action_3, 5))
 
         return policy

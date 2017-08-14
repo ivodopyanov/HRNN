@@ -20,8 +20,8 @@ def copy_weights_encoder_to_predictor_charbased(objects):
     predictor.get_layer('encoder').W.set_value(K.get_value(encoder.get_layer('encoder').W))
     predictor.get_layer('encoder').U.set_value(K.get_value(encoder.get_layer('encoder').U))
     predictor.get_layer('encoder').b.set_value(K.get_value(encoder.get_layer('encoder').b))
-    predictor.get_layer('encoder').W1.set_value(K.get_value(encoder.get_layer('encoder').W1))
-    predictor.get_layer('encoder').b1.set_value(K.get_value(encoder.get_layer('encoder').b1))
+    #predictor.get_layer('encoder').W1.set_value(K.get_value(encoder.get_layer('encoder').W1))
+    #predictor.get_layer('encoder').b1.set_value(K.get_value(encoder.get_layer('encoder').b1))
     predictor.get_layer('dense_0').kernel.set_value(K.get_value(encoder.get_layer('dense_0').kernel))
     predictor.get_layer('dense_0').bias.set_value(K.get_value(encoder.get_layer('dense_0').bias))
     predictor.get_layer('output').kernel.set_value(K.get_value(encoder.get_layer('output').kernel))
@@ -32,6 +32,7 @@ def copy_weights_rl_to_predictor(objects):
     predictor = objects['predictor']
     rl_model = objects['rl_model']
     predictor.get_layer('encoder').W_action_1.set_value(K.get_value(rl_model.get_layer('encoder').W_action_1))
+    predictor.get_layer('encoder').V_action_1.set_value(K.get_value(rl_model.get_layer('encoder').V_action_1))
     predictor.get_layer('encoder').U_action_1.set_value(K.get_value(rl_model.get_layer('encoder').U_action_1))
     predictor.get_layer('encoder').b_action_1.set_value(K.get_value(rl_model.get_layer('encoder').b_action_1))
     predictor.get_layer('encoder').W_action_3.set_value(K.get_value(rl_model.get_layer('encoder').W_action_3))
@@ -41,6 +42,7 @@ def copy_weights_rl_to_encoder(objects):
     encoder = objects['encoder']
     rl_model = objects['rl_model']
     encoder.get_layer('encoder').W_action_1.set_value(K.get_value(rl_model.get_layer('encoder').W_action_1))
+    encoder.get_layer('encoder').V_action_1.set_value(K.get_value(rl_model.get_layer('encoder').V_action_1))
     encoder.get_layer('encoder').U_action_1.set_value(K.get_value(rl_model.get_layer('encoder').U_action_1))
     encoder.get_layer('encoder').b_action_1.set_value(K.get_value(rl_model.get_layer('encoder').b_action_1))
     encoder.get_layer('encoder').W_action_3.set_value(K.get_value(rl_model.get_layer('encoder').W_action_3))
@@ -50,6 +52,7 @@ def copy_weights_predictor_to_encoder(objects):
     encoder = objects['encoder']
     predictor = objects['predictor']
     encoder.get_layer('encoder').W_action_1.set_value(K.get_value(predictor.get_layer('encoder').W_action_1))
+    encoder.get_layer('encoder').V_action_1.set_value(K.get_value(predictor.get_layer('encoder').V_action_1))
     encoder.get_layer('encoder').U_action_1.set_value(K.get_value(predictor.get_layer('encoder').U_action_1))
     encoder.get_layer('encoder').b_action_1.set_value(K.get_value(predictor.get_layer('encoder').b_action_1))
     encoder.get_layer('encoder').W_action_3.set_value(K.get_value(predictor.get_layer('encoder').W_action_3))
@@ -60,6 +63,7 @@ def copy_weights_predictor_evo_to_encoder(objects):
     encoder = objects['encoder']
     predictor = objects['predictor_evo']
     encoder.get_layer('encoder').W_action_1.set_value(K.get_value(predictor.get_layer('encoder').W_action_1))
+    encoder.get_layer('encoder').V_action_1.set_value(K.get_value(predictor.get_layer('encoder').V_action_1))
     encoder.get_layer('encoder').U_action_1.set_value(K.get_value(predictor.get_layer('encoder').U_action_1))
     encoder.get_layer('encoder').b_action_1.set_value(K.get_value(predictor.get_layer('encoder').b_action_1))
     #encoder.get_layer('encoder').W_action_2.set_value(K.get_value(predictor.get_layer('encoder').W_action_2))
@@ -105,8 +109,6 @@ def run_training2(data, objects, settings):
             batch = next(objects['data_gen'])
 
             loss1 = encoder.train_on_batch(batch[0], batch[1])
-            if isnan(loss1[0]):
-                continue
             loss1_total.append(loss1[0])
             acc_total.append(loss1[1])
 
@@ -130,25 +132,23 @@ def run_training2(data, objects, settings):
 
             output = y_pred[0]
             input_x = y_pred[1]
-            input_h = y_pred[2]
-            policy = y_pred[3]
-            policy_calculated = y_pred[4]
+            input_next_x = y_pred[2]
+            input_h = y_pred[3]
+            policy = y_pred[4]
             chosen_action = y_pred[5]
             policy_depth = y_pred[6]
             depth = y_pred[7]
+            thread_id = y_pred[8]
 
             depth_total.append(depth[0])
 
-            if np.sum(policy_calculated) > 0:
-                error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
-                #error = -np.log(np.sum(output*batch[1], axis=1))
-                X,Y,sample_weight = restore_exp3(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
-                loss2 = rl_model.train_on_batch(X,Y)
-                if isnan(loss2):
-                    continue
-                loss2_total.append(loss2)
-                copy_weights_rl_to_predictor(objects)
-                copy_weights_rl_to_encoder(objects)
+            error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
+            #error = -np.log(np.sum(output*batch[1], axis=1))
+            X,Y,sample_weight = restore_exp3(settings, error, input_x, input_next_x, input_h, policy, chosen_action, policy_depth, thread_id)
+            loss2 = rl_model.train_on_batch(X,Y)
+            loss2_total.append(loss2)
+            copy_weights_rl_to_predictor(objects)
+            copy_weights_rl_to_encoder(objects)
 
 
             if len(loss2_total) == 0:
@@ -186,20 +186,18 @@ def run_training2(data, objects, settings):
 
             output = y_pred[0]
             input_x = y_pred[1]
-            input_h = y_pred[2]
-            policy = y_pred[3]
-            policy_calculated = y_pred[4]
+            input_next_x = y_pred[2]
+            input_h = y_pred[3]
+            policy = y_pred[4]
             chosen_action = y_pred[5]
             policy_depth = y_pred[6]
             depth = y_pred[7]
-            if np.sum(policy_calculated) > 0:
-                error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
-                #error = -np.log(np.sum(output*batch[1], axis=1))
-                X,Y,sample_weight = restore_exp3(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
-                loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
-                if isnan(loss2):
-                    continue
-                loss2_total.append(loss2)
+            thread_id = y_pred[8]
+            error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
+            #error = -np.log(np.sum(output*batch[1], axis=1))
+            X,Y,sample_weight = restore_exp3(settings, error, input_x, input_next_x, input_h, policy, chosen_action, policy_depth, thread_id)
+            loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
+            loss2_total.append(loss2)
             loss1_total.append(loss1[0])
             acc_total.append(loss1[1])
             depth_total.append(depth[0])
@@ -306,21 +304,21 @@ def run_training_RL_only(data, objects, settings):
             y_pred = predictor.predict_function(ins)
             output = y_pred[0]
             input_x = y_pred[1]
-            input_h = y_pred[2]
-            policy = y_pred[3]
-            policy_calculated = y_pred[4]
+            input_next_x = y_pred[2]
+            input_h = y_pred[3]
+            policy = y_pred[4]
             chosen_action = y_pred[5]
             policy_depth = y_pred[6]
             depth = y_pred[7]
+            thread_id = y_pred[8]
 
-            if np.sum(policy_calculated) > 0:
-                error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
-                #error = -np.log(np.sum(output*batch[1], axis=1))
-                X,Y,sample_weight = restore_exp3(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
-                loss2 = rl_model.train_on_batch(X,Y)
-                loss2_total.append(loss2)
-                copy_weights_rl_to_predictor(objects)
-                copy_weights_rl_to_encoder(objects)
+            error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
+            #error = -np.log(np.sum(output*batch[1], axis=1))
+            X,Y,sample_weight = restore_exp3(settings, error, input_x, input_next_x, input_h, policy, chosen_action, policy_depth, thread_id)
+            loss2 = rl_model.train_on_batch(X,Y)
+            loss2_total.append(loss2)
+            copy_weights_rl_to_predictor(objects)
+            copy_weights_rl_to_encoder(objects)
 
 
             depth_total.append(depth[0])
@@ -349,18 +347,18 @@ def run_training_RL_only(data, objects, settings):
             y_pred = predictor.predict_on_batch(ins)
             output = y_pred[0]
             input_x = y_pred[1]
-            input_h = y_pred[2]
-            policy = y_pred[3]
-            policy_calculated = y_pred[4]
+            input_next_x = y_pred[2]
+            input_h = y_pred[3]
+            policy = y_pred[4]
             chosen_action = y_pred[5]
             policy_depth = y_pred[6]
             depth = y_pred[7]
-            if np.sum(policy_calculated) > 0:
-                #error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
-                error = -np.log(np.sum(output*batch[1], axis=1))
-                X,Y,sample_weight = restore_exp3(settings, input_x, error, input_h, policy, policy_calculated, chosen_action, policy_depth)
-                loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
-                loss2_total.append(loss2)
+            thread_id = y_pred[8]
+            #error = np.minimum(-np.log(np.sum(output*batch[1], axis=1)), ERROR_LIMIT)
+            error = -np.log(np.sum(output*batch[1], axis=1))
+            X,Y,sample_weight = restore_exp3(settings, error, input_x, input_next_x, input_h, policy, chosen_action, policy_depth, thread_id)
+            loss2 = rl_model.evaluate(X,Y, batch_size=settings['batch_size'], verbose=0)
+            loss2_total.append(loss2)
             depth_total.append(depth[0])
             loss1_total.append(loss1[0])
             acc_total.append(loss1[1])
@@ -371,7 +369,10 @@ def run_training_RL_only(data, objects, settings):
                                      np.sum(loss2_total)*1.0/len(loss2_total),
                                      np.sum(depth_total)*1.0/len(depth_total)))
 
-def restore_exp(settings, x, total_error, h, policy, fk_calculated, chosen_action, policy_depth):
+def restore_exp(settings, x, total_error, h, policy, chosen_action, policy_depth, thread_id):
+
+    fk_calculated, decision_performed = find_policy_calculated_points(thread_id)
+
     max_policy_depth = np.max(policy_depth, axis=(1,2))
     max_policy_depth = np.repeat(np.expand_dims(max_policy_depth, axis=1), policy_depth.shape[1], axis=1)
     max_policy_depth = np.repeat(np.expand_dims(max_policy_depth, axis=2), policy_depth.shape[2], axis=2)
@@ -392,15 +393,46 @@ def restore_exp(settings, x, total_error, h, policy, fk_calculated, chosen_actio
     reduce_action_policy = np.concatenate((np.expand_dims(policy[:,:,:,0], axis=3), np.expand_dims(reduce_action_mask*error_mult, axis=3)), axis=3)
     reduce_action_policy = np.repeat(np.expand_dims(reduce_action_mask, axis=3), 2, axis=3)*reduce_action_policy
     new_policy = shift_action_policy + reduce_action_policy
-    decision_performed = np.where(fk_calculated == 1)
+
+    #next_x = np.concatenate([x[:,:,1:,:], np.zeros_like(x[:,:,0:1,:])], axis=2)
+
     x_value_input = x[decision_performed]
+    #next_x_value_input = next_x[decision_performed]
     h_value_input = h[decision_performed]
     sample_weight = policy_depth[decision_performed]
     policy_output = new_policy[decision_performed]
     return [x_value_input, h_value_input], policy_output, sample_weight
 
 
-def restore_exp3(settings, x, total_error, h, policy, fk_calculated, chosen_action, policy_depth):
+def find_policy_calculated_points(thread_id):
+    this_ids = np.concatenate((thread_id[:,:,:-1], np.zeros_like(thread_id[:,:,0:1])), axis=-1)
+    candidate_ids = np.concatenate((thread_id[:,:,1:], np.zeros_like(thread_id[:,:,0:1])), axis=-1)
+    diff_thread_id = this_ids - candidate_ids
+    diff_thread_id = diff_thread_id*(thread_id!=0)
+    fk_calculated = diff_thread_id != 0
+    decision_performed = np.where(fk_calculated == 1)
+
+
+
+    id_tuples = np.concatenate((np.expand_dims(this_ids, 3), np.expand_dims(candidate_ids, 3)), axis=3)
+    a = np.concatenate((np.expand_dims(decision_performed[0], 1),np.expand_dims(decision_performed[1], 1),np.expand_dims(decision_performed[2], 1), np.expand_dims(decision_performed[0], 1), id_tuples[decision_performed]), axis=1)
+
+    uniques = set()
+    fixed_fk_calculated = np.zeros_like(diff_thread_id, dtype="bool")
+    for row in a:
+        t = tuple(row[3:])
+        if t not in uniques:
+            fixed_fk_calculated[row[0],row[1],row[2]] = True
+            uniques.add(t)
+    fk_calculated = fixed_fk_calculated
+    decision_performed = np.where(fk_calculated == 1)
+    return fk_calculated, decision_performed
+
+
+def restore_exp3(settings, total_error, x, next_x, h, policy, chosen_action, policy_depth, thread_id):
+    fk_calculated, decision_performed = find_policy_calculated_points(thread_id)
+
+
     num_of_decisions = np.sum(fk_calculated, axis=(1,2))
     predicted_error = policy[:,:,:,0]*chosen_action+policy[:,:,:,1]*(1-chosen_action)
     predicted_error = predicted_error * fk_calculated
@@ -424,12 +456,13 @@ def restore_exp3(settings, x, total_error, h, policy, fk_calculated, chosen_acti
     shift_action_policy = np.repeat(np.expand_dims(shift_action_mask, axis=3), 2, axis=3)*shift_action_policy
     policy_update = shift_action_policy + reduce_action_policy
     new_policy = policy+policy_update
-    decision_performed = np.where(fk_calculated == 1)
+
     x_value_input = x[decision_performed]
+    next_x_value_input = next_x[decision_performed]
     h_value_input = h[decision_performed]
     sample_weight = policy_depth[decision_performed]
     policy_output = new_policy[decision_performed]
-    return [x_value_input, h_value_input], policy_output, sample_weight
+    return [x_value_input, next_x_value_input, h_value_input], policy_output, sample_weight
 
 
 def restore_exp2(settings, x, total_error, h, policy, fk_calculated, chosen_action, policy_depth):

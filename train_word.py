@@ -85,23 +85,23 @@ def init_settings():
     settings['word_embedding_size'] = 32
     settings['sentence_embedding_size'] = 32
     settings['inner_dim'] = 32
-    settings['depth'] = 10
+    settings['depth'] = 20
     settings['action_dim'] = 32
     settings['dropout_W'] = 0.2
     settings['dropout_U'] = 0.0
-    settings['dropout_action'] = 0.5
+    settings['dropout_action'] = 0.2
     settings['dropout_emb'] = 0.0
-    settings['hidden_dims'] = [32]
+    settings['hidden_dims'] = [128]
     settings['dense_dropout'] = 0.5
     settings['bucket_size_step'] = 4
-    settings['batch_size'] = 32
-    settings['max_len'] = 128
+    settings['batch_size'] = 16
+    settings['max_len'] = 64
     settings['current_max_len']=8
     settings['max_features']=30000
     settings['with_sentences']=False
     settings['epochs'] = 200
-    settings['random_action_prob_max'] = 0.9
-    settings['random_action_prob_min'] = 0.0
+    settings['random_action_prob_max'] = 0.5
+    settings['random_action_prob_min'] = 0.1
     settings['random_action_prob_decay'] = 0.9
     settings['copy_etp'] = copy_weights_encoder_to_predictor_wordbased
     settings['with_embedding'] = False
@@ -172,7 +172,7 @@ def build_encoder(data, settings):
     layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
     model = Model(inputs=[data_input, bucket_size_input], outputs=[output])
-    optimizer = Adam(clipvalue=5)
+    optimizer = Adam()
 
     model.compile(loss={"output": "categorical_crossentropy"}, optimizer=optimizer, metrics={"output":'accuracy'})
     return model
@@ -216,12 +216,13 @@ def build_predictor(data, settings):
     layer = Dropout(settings['dense_dropout'])(layer)
     output = Dense(settings['num_of_classes'], activation='softmax', name='output')(layer)
     model = Model(inputs=[data_input, bucket_size_input, random_action_prob],
-                  outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6], encoder[7]])
+                  outputs=[output, encoder[1], encoder[2], encoder[3], encoder[4], encoder[5], encoder[6], encoder[7], encoder[8]])
     return model
 
 
 def build_RL_model(settings):
     x_input = Input(shape=(settings['sentence_embedding_size'],))
+    next_x_input = Input(shape=(settings['sentence_embedding_size'],))
     h_tm1_input = Input(shape=(settings['sentence_embedding_size'],))
     layer = Encoder_RL_Layer(hidden_dim=settings['sentence_embedding_size'],
                              action_dim=settings['action_dim'],
@@ -229,9 +230,9 @@ def build_RL_model(settings):
                              dropout_w=settings['dropout_W'],
                              dropout_u=settings['dropout_U'],
                              l2=settings['l2'],
-                             name='encoder')([x_input, h_tm1_input])
-    model = Model(inputs=[x_input, h_tm1_input], outputs=[layer])
-    optimizer = Adam(clipvalue=5)
+                             name='encoder')([x_input, next_x_input, h_tm1_input])
+    model = Model(inputs=[x_input, next_x_input, h_tm1_input], outputs=[layer])
+    optimizer = Adam()
     model.compile(loss='mse', optimizer=optimizer)
     return model
 
@@ -274,7 +275,10 @@ def build_batch(data, settings, sentence_batch):
     for i, sentence_tuple in enumerate(sentence_batch):
         for idx, word in enumerate(sentence_tuple[0]):
             if word in data['word_corpus_encode']:
-                X[i][idx] = data['word_corpus_encode'][word]+1
+                try:
+                    X[i][idx] = data['word_corpus_encode'][word]+1
+                except IndexError:
+                    pass
             else:
                 X[i][idx] = settings['max_features']+1
             Y[i][data['labels'].index(sentence_tuple[1])] = True
@@ -286,16 +290,19 @@ def build_batch(data, settings, sentence_batch):
 
 ###############################################################
 
+def prepare_all():
+    settings = init_settings()
+    data, settings = get_data(settings)
+    objects = prepare_objects(data, settings)
+    return data, objects, settings
 
 def train(filename):
     settings = init_settings()
-    settings['with_sentences']=True
     data, settings = get_data(settings)
     objects = prepare_objects(data, settings)
-    settings['current_max_len']=16
-    #objects['encoder'].load_weights("encoder3.h5")
-    #objects['predictor'].load_weights("predictor3.h5")
-    #objects['rl_model'].load_weights("rl_model3.h5")
+    #objects['encoder'].load_weights("encoder_simple.h5")
+    #objects['predictor'].load_weights("predictor_simple.h5")
+    #objects['rl_model'].load_weights("rl_model_simple.h5")
 
     #load(objects, filename)
     sys.stdout.write('Compiling model\n')
