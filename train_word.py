@@ -12,9 +12,9 @@ import keras.backend as K
 from theano.printing import Print
 
 import utils
-from Encoder3.Encoder_Predictor import Encoder_Predictor
-from Encoder3.Encoder_Processor import Encoder_Processor
-from Encoder3.Encoder_RL_layer import Encoder_RL_Layer
+from Encoder4.Encoder_Predictor import Encoder_Predictor
+from Encoder4.Encoder_Processor import Encoder_Processor
+from Encoder4.Encoder_RL_layer import Encoder_RL_Layer
 from train_utils import run_training2, copy_weights_encoder_to_predictor_wordbased, run_training_encoder_only, run_training_RL_only
 
 CASES_FILENAME = "cases.txt"

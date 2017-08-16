@@ -10,7 +10,7 @@ from keras.models import Model
 from keras.optimizers import Adam
 
 import utils
-from Encoder6.Encoder import Seq2Seq_Encoder
+from Encoder6.Encoder_Processor import Encoder_Processor
 from train_utils import run_training2, copy_weights_encoder_to_predictor_wordbased, run_training_encoder_only, run_training_RL_only
 
 CASES_FILENAME = "cases.txt"
@@ -83,7 +83,8 @@ def init_settings():
     settings['word_embedding_size'] = 32
     settings['sentence_embedding_size'] = 32
     settings['depth'] = 6
-    settings['action_dim'] = 64
+    settings['action_dim'] = 32
+    settings['inner_dim']=32
     settings['dropout_W'] = 0.0
     settings['dropout_U'] = 0.0
     settings['dropout_action'] = 0.0
@@ -129,15 +130,22 @@ def build_encoder(data, settings):
     data_input = Input(shape=(settings['max_len'],), dtype="int64")
     bucket_size_input = Input(shape=(1,),dtype="int32")
 
-    encoder = Seq2Seq_Encoder(word_count=settings['max_features']+2,
-                              units=settings['sentence_embedding_size'],
-                              batch_size = settings['batch_size'],
-                              dropout_u=settings['dropout_U'],
-                              dropout_w=settings['dropout_W'],
-                              l2=settings['l2'],
-                              kernel_size = settings['kernel_size'],
-                              filters = settings['filters'],
-                              name='encoder')([data_input, bucket_size_input])
+    embedding = Embedding(input_dim=settings['max_features']+2,
+                          output_dim=settings['word_embedding_size'],
+                          name='emb',
+                          mask_zero=True)(data_input)
+
+    encoder = Encoder_Processor(input_dim=settings['word_embedding_size'],
+                                inner_dim=settings['inner_dim'],
+                                hidden_dim=settings['sentence_embedding_size'],
+                                depth=settings['depth'],
+                                action_dim=settings['action_dim'],
+                                batch_size = settings['batch_size'],
+                                dropout_u=settings['dropout_U'],
+                                dropout_w=settings['dropout_W'],
+                                dropout_action=settings['dropout_action'],
+                                l2=settings['l2'],
+                                name='encoder')([embedding, bucket_size_input])
     layer = encoder
 
     for idx, hidden_dim in enumerate(settings['hidden_dims']):

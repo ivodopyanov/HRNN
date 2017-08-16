@@ -16,10 +16,11 @@ class Encoder_Predictor(Encoder_Base):
         super(Encoder_Predictor, self).__init__(**kwargs)
 
     def compute_mask(self, input, input_mask=None):
-        return [None, None, None, None, None, None, None, None]
+        return [None, None, None, None, None, None, None, None, None]
 
     def compute_output_shape(self, input_shape):
         return [(input_shape[0][0], self.hidden_dim),
+                (self.batch_size, self.depth, 1,self.hidden_dim),
                 (self.batch_size, self.depth, 1,self.hidden_dim),
                 (self.batch_size, self.depth, 1,self.hidden_dim),
                 (self.batch_size, self.depth, 1, 2),
@@ -62,6 +63,7 @@ class Encoder_Predictor(Encoder_Base):
         initial_policy = TS.extra_ops.repeat(initial_policy, 2, axis=2)
 
         initial_policy_input_x = K.zeros_like(x)
+        initial_policy_input_next_x = K.zeros_like(x)
         initial_policy_input_h = K.zeros_like((x))
         initial_depth = K.zeros((1,), dtype="int8")
         initial_policy_depth = K.zeros_like(data_mask, dtype="int8")
@@ -72,18 +74,19 @@ class Encoder_Predictor(Encoder_Base):
         initial_maximum_id = TS.sum(data_mask, axis=0)
 
         results, _ = T.scan(self.vertical_step,
-                        outputs_info=[x, data_mask, data_mask, initial_policy_input_x, initial_policy_input_h, initial_policy, initial_policy_depth, initial_depth, initial_thread_id, initial_maximum_id],
+                        outputs_info=[x, data_mask, data_mask, initial_policy_input_x, initial_policy_input_next_x, initial_policy_input_h, initial_policy, initial_policy_depth, initial_depth, initial_thread_id, initial_maximum_id],
                         non_sequences=[random_action_prob],
                         n_steps=self.depth-1)
 
         chosen_action = results[1]
         has_value = results[2]
         policy_input_x = results[3]
-        policy_input_h = results[4]
-        policy = results[5]
-        policy_depth = results[6]
-        depth = results[7][-1]
-        thread_id = results[8]
+        policy_input_next_x = results[4]
+        policy_input_h = results[5]
+        policy = results[6]
+        policy_depth = results[7]
+        depth = results[8][-1]
+        thread_id = results[9]
 
         data_mask = chosen_action
         '''data_mask = chosen_action.dimshuffle([2,0,1])
@@ -115,6 +118,7 @@ class Encoder_Predictor(Encoder_Base):
 
         return [outputs,
                 policy_input_x.dimshuffle([2,0,1,3]),
+                policy_input_next_x.dimshuffle([2,0,1,3]),
                 policy_input_h.dimshuffle([2,0,1,3]),
                 policy.dimshuffle([2,0,1,3]),
                 chosen_action.dimshuffle([2,0,1]),
@@ -125,12 +129,13 @@ class Encoder_Predictor(Encoder_Base):
     def init_thread_id(self, mask, prev_id):
         return TS.switch(mask, prev_id+1, 0)
 
-    def vertical_step(self, x, x_mask, prev_has_value, policy_input_x_tm1, policy_input_h_tm1, policy_tm1, prev_policy_depth, prev_depth, prev_thread_id, prev_maximum_id, random_action_prob):
+    def vertical_step(self, x, x_mask, prev_has_value, policy_input_x_tm1, policy_input_next_x_tm1, policy_input_h_tm1, policy_tm1, prev_policy_depth, prev_depth, prev_thread_id, prev_maximum_id, random_action_prob):
 
         initial_h = K.zeros((self.batch_size, self.hidden_dim), name="initial_h")
         initial_new_mask = K.ones((self.batch_size), dtype="bool", name="initial_new_mask")
         initial_policy = K.zeros((self.batch_size, 2), name="initial_policy")
         initial_policy_input_x = K.zeros((self.batch_size, self.hidden_dim), name="initial_policy_input_x")
+        initial_policy_input_next_x = K.zeros((self.batch_size, self.hidden_dim), name="initial_policy_input_next_x")
         initial_policy_input_h = K.zeros((self.batch_size, self.hidden_dim), name="initial_policy_input_h")
         initial_has_value = K.zeros((self.batch_size), dtype="bool")
         initial_policy_depth = K.zeros((self.batch_size), dtype="int8")
@@ -141,32 +146,34 @@ class Encoder_Predictor(Encoder_Base):
 
         results, _ = T.scan(self.horizontal_step,
                             sequences=[x, next_x, x_mask, prev_has_value, last_value_mask, prev_policy_depth, prev_thread_id],
-                            outputs_info=[initial_h, initial_new_mask, initial_has_value, initial_had_both_on_current_lebel, initial_policy_input_x, initial_policy_input_h, initial_policy, initial_policy_depth, initial_thread_id, prev_maximum_id],
+                            outputs_info=[initial_h, initial_new_mask, initial_has_value, initial_had_both_on_current_lebel, initial_policy_input_x, initial_policy_input_next_x, initial_policy_input_h, initial_policy, initial_policy_depth, initial_thread_id, prev_maximum_id],
                             non_sequences=[random_action_prob])
         new_h = results[0]
         new_mask = results[1]
         has_value = results[2]
         policy_input_x = results[4]
-        policy_input_h = results[5]
-        policy = results[6]
-        policy_depth = results[7]
-        thread_id = results[8]
-        maximum_id = results[9][-1]
+        policy_input_next_x = results[5]
+        policy_input_h = results[6]
+        policy = results[7]
+        policy_depth = results[8]
+        thread_id = results[9]
+        maximum_id = results[10][-1]
 
 
 
 
         new_mask = TS.concatenate([new_mask[1:], K.ones((1, self.batch_size), dtype="bool")], axis=0)
         policy_input_x = TS.concatenate([policy_input_x[1:], K.zeros((1, self.batch_size, self.hidden_dim))], axis=0)
+        policy_input_next_x = TS.concatenate([policy_input_next_x[1:], K.zeros((1, self.batch_size, self.hidden_dim))], axis=0)
         policy_input_h = TS.concatenate([policy_input_h[1:], K.zeros((1, self.batch_size, self.hidden_dim))], axis=0)
         policy = TS.concatenate([policy[1:], K.zeros((1, self.batch_size, 2))], axis=0)
         policy_depth = TS.concatenate([policy_depth[1:], K.zeros((1, self.batch_size), dtype="int8")], axis=0)
 
         depth = TS.cast(prev_depth+1, dtype="int8")
 
-        return [new_h, new_mask, has_value, policy_input_x, policy_input_h, policy, policy_depth, depth, thread_id, maximum_id], T.scan_module.until(TS.eq(TS.sum(new_mask*has_value), self.batch_size))
+        return [new_h, new_mask, has_value, policy_input_x, policy_input_next_x, policy_input_h, policy, policy_depth, depth, thread_id, maximum_id], T.scan_module.until(TS.eq(TS.sum(new_mask*has_value), self.batch_size))
 
-    def horizontal_step(self, x, next_x, prev_mask, prev_has_value, last_value_mask, prev_policy_depth, prev_thread_id, h_tm1, mask_tm1, has_value_tm1, had_both_on_current_level_tm1, policy_input_x_tm1, policy_input_h_tm1, policy_tm1, policy_depth_tm1, thread_id_tm1, maximum_id_tm1, random_action_prob):
+    def horizontal_step(self, x, next_x, prev_mask, prev_has_value, last_value_mask, prev_policy_depth, prev_thread_id, h_tm1, mask_tm1, has_value_tm1, had_both_on_current_level_tm1, policy_input_x_tm1, policy_input_next_x_tm1, policy_input_h_tm1, policy_tm1, policy_depth_tm1, thread_id_tm1, maximum_id_tm1, random_action_prob):
 
         if 0 < self.dropout_u < 1:
             ones = K.ones((self.inner_dim))
@@ -255,7 +262,7 @@ class Encoder_Predictor(Encoder_Base):
 
         had_both_on_current_level = TS.or_(both, had_both_on_current_level_tm1)
 
-        return h, new_mask, has_value, had_both_on_current_level, x, h_tm1, policy, policy_depth, new_thread_id, maximum_id
+        return h, new_mask, has_value, had_both_on_current_level, x, next_x, h_tm1, policy, policy_depth, new_thread_id, maximum_id
 
 
 
